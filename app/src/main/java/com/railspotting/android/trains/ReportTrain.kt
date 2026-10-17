@@ -16,8 +16,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -36,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -54,7 +58,8 @@ import org.json.JSONObject
 private sealed interface Step {
     data object NeedLocation : Step
     data object Looking : Step
-    data class Form(val fix: String, val trains: List<NearTrain>, val lookError: String?) : Step
+    /** `lines` is empty when the headend doesn't take a chosen crossing yet (v1.14). */
+    data class Form(val fix: String, val trains: List<NearTrain>, val lookError: String?, val lines: List<PlaceLine> = listOf()) : Step
     data class Done(val url: String?) : Step
 }
 
@@ -86,7 +91,13 @@ fun ReportTrainDialog(app: RailSpottingApp, onClose: () -> Unit) {
                 seed.fill(0)
             }
             val (trains, err) = NearTrain.list(answer)
-            Step.Form(fix, trains.orEmpty(), err)
+            // the lines and crossings within half a mile, when the headend takes a chosen one
+            val lines = if (Native.trainReportPlace(app.stateDir.absolutePath)) {
+                PlaceLine.list(Native.reportPlaces(at.latitude, at.longitude))
+            } else {
+                listOf()
+            }
+            Step.Form(fix, trains.orEmpty(), err, lines)
         }
     }
 
@@ -158,6 +169,10 @@ private fun ReportForm(s: Step.Form, send: suspend (JSONObject) -> String?) {
     var link by remember { mutableStateOf("") }
     var sending by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    // where: the nearest line and crossing to start with; the track only when the owner knows it
+    var line by remember { mutableIntStateOf(0) }
+    var crossing by remember { mutableIntStateOf(0) }
+    var track by remember { mutableStateOf<Int?>(null) }
     val now = System.currentTimeMillis() / 1000.0
 
     Text("Train", style = MaterialTheme.typography.titleMedium)
@@ -179,6 +194,20 @@ private fun ReportForm(s: Step.Form, send: suspend (JSONObject) -> String?) {
         Text(if (s.trains.isEmpty()) "A train RailSpotting doesn't know" else "Not listed, or I don't know which")
     }
     HorizontalDivider()
+    if (s.lines.isNotEmpty()) {
+        Text("Where", style = MaterialTheme.typography.titleMedium)
+        Choice("Line", s.lines.map { it.label }, line) {
+            line = it
+            crossing = 0
+        }
+        val crossings = s.lines.getOrNull(line)?.crossings.orEmpty()
+        Choice("Crossing", crossings.map { it.label }, crossing) { crossing = it }
+        val tracks = listOf("Not sure") + PlaceLine.TRACKS.map { "Main $it" }
+        Choice("Track", tracks, track ?: 0) { track = if (it == 0) null else PlaceLine.TRACKS[it - 1] }
+        Text("Lines and crossings within half a mile of you.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        HorizontalDivider()
+    }
     OutlinedTextField(locomotives, { locomotives = it.replace("\n", " ").take(200) }, Modifier.fillMaxWidth(),
         label = { Text("Locomotives") }, placeholder = { Text("NS 4321, NS 1234") }, singleLine = true)
     OutlinedTextField(cars, { v -> cars = v.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(),
@@ -196,9 +225,34 @@ private fun ReportForm(s: Step.Form, send: suspend (JSONObject) -> String?) {
         val input = JSONObject()
             .put("locomotives", locomotives).put("cars", cars).put("body", body).put("link", link)
         if (pick >= 0) input.put("train_id", s.trains[pick].id)
+        s.lines.getOrNull(line)?.crossings?.getOrNull(crossing)?.let { input.put("crossing_id", it.id) }
+        track?.let { input.put("track", it) }
         scope.launch {
             problem = send(input)
             sending = false
         }
     }) { Text(if (sending) "Sending…" else "Send report") }
 }
+
+/** A labelled dropdown: the choice shows on a button that opens the list. */
+@Composable
+private fun Choice(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(0.3f))
+        Column(Modifier.weight(0.7f)) {
+            OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(options.getOrElse(selected) { "" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                options.forEachIndexed { i, o ->
+                    DropdownMenuItem(text = { Text(o) }, onClick = {
+                        open = false
+                        onSelect(i)
+                    })
+                }
+            }
+        }
+    }
+}
+

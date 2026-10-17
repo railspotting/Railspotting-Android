@@ -91,6 +91,12 @@ object Native {
     /** Fetch the headend's settings now: `{"ok": true, "train_reports": bool}` or an error. Blocks; no listening needed. */
     @JvmStatic external fun refreshConfig(server: String, seed: ByteArray, deviceId: String, stateDir: String): String
 
+    /** The headend takes a chosen crossing and track on a report (cached /config). Proposed v1.14. */
+    @JvmStatic external fun trainReportPlace(stateDir: String): Boolean
+
+    /** Lines and crossings within half a mile, from the public live map: `{"ok": true, "lines": [...]}`. Blocks. */
+    @JvmStatic external fun reportPlaces(lat: Double, lon: Double): String
+
     /** Trains near the phone: `{"ok": true, "trains": [...]}` or an error. Blocks; works without listening. */
     @JvmStatic external fun nearbyTrains(server: String, seed: ByteArray, deviceId: String, lat: Double, lon: Double): String
 
