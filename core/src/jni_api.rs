@@ -164,6 +164,23 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_trainReports(mu
     on as jboolean
 }
 
+/// Fetch the headend's settings now (train reports work without listening):
+/// `{"ok": true, "train_reports": bool}` or an error.
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_refreshConfig(
+    mut env: JNIEnv, _c: JClass, server: JString, seed: JByteArray, device_id: JString, state_dir: JString) -> jstring {
+    let dir = PathBuf::from(text(&mut env, &state_dir));
+    let r = match device_client(&mut env, &server, &seed, &device_id) {
+        Ok(api) => guard(json!({"ok": false, "error": "internal"}), || {
+            let r = trains::refresh_config(&api, &dir);
+            CORE.skew.absorb(&api);
+            r
+        }),
+        Err(e) => e,
+    };
+    out(&mut env, r.to_string())
+}
+
 /// Trains the headend knows near the phone: `{"ok": true, "trains": [...]}` or an error.
 #[no_mangle]
 pub extern "system" fn Java_com_railspotting_android_core_Native_nearbyTrains(

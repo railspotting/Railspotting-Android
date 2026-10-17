@@ -531,3 +531,20 @@ fn integrity_goes_with_the_link_and_never_blocks_it() {
     let sent = fake.st().links.last().cloned().unwrap();
     assert!(sent.get("integrity_token").is_none() && sent["integrity_error"] == "API_NOT_AVAILABLE");
 }
+
+#[test]
+fn the_report_button_learns_the_flag_without_listening() {
+    // the headend's v1.13 flag must reach a phone that has never listened since installing
+    let fake = Fake::start();
+    let skew = SkewClock::new();
+    let (seed, r) = sign_in(&fake, "gus", &skew);
+    let dev = r.unwrap().1["device_id"].as_str().unwrap().to_string();
+    let dir = tempdir::Dir::new();
+    assert!(!trains::enabled(&railspotting_common::load_cached_config(&dir.path)), "nothing kept yet");
+    let key = link::key_from_seed(&seed).unwrap();
+    let api = link::client(&fake.url(), &key, Some(dev), skew.clock()).unwrap();
+    let r = trains::refresh_config(&api, &dir.path);
+    assert_eq!(r, json!({"ok": true, "train_reports": true}), "{r}");
+    // kept where the receiver keeps its copy, so the button stays after a restart
+    assert!(trains::enabled(&railspotting_common::load_cached_config(&dir.path)));
+}

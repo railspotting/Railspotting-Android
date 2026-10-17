@@ -88,6 +88,9 @@ object Native {
     /** The headend takes train reports (its cached /config, in `stateDir`). Proposed v1.13. */
     @JvmStatic external fun trainReports(stateDir: String): Boolean
 
+    /** Fetch the headend's settings now: `{"ok": true, "train_reports": bool}` or an error. Blocks; no listening needed. */
+    @JvmStatic external fun refreshConfig(server: String, seed: ByteArray, deviceId: String, stateDir: String): String
+
     /** Trains near the phone: `{"ok": true, "trains": [...]}` or an error. Blocks; works without listening. */
     @JvmStatic external fun nearbyTrains(server: String, seed: ByteArray, deviceId: String, lat: Double, lon: Double): String
 
