@@ -30,6 +30,7 @@ import com.railspotting.android.location.Fixes
 import com.railspotting.android.location.LocationFeed
 import com.railspotting.android.ui.MainActivity
 import com.railspotting.android.usb.Dongle
+import com.railspotting.android.usb.Reconnect
 import org.json.JSONObject
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -51,6 +52,7 @@ class ListenService : Service() {
     private var started = false
     private var lastNote = ""
     private val ownEot = OwnEot()
+    private val reconnect = Reconnect()
     private lateinit var bg: ExecutorService
     /** Status calls into the core, off the main thread; one at a time. */
     private lateinit var statusBg: ExecutorService
@@ -167,11 +169,17 @@ class ListenService : Service() {
             return
         }
         usb.poll()
+        // no data from the dongle: open its connection afresh, at growing intervals
+        if (reconnect.due(st.radio.attached, st.radio.connected, System.currentTimeMillis())) {
+            usb.reconnect("no data for a while (try ${reconnect.tries})" +
+                if (st.radio.error.isNotEmpty()) ": ${st.radio.error}" else "")
+        }
         if (st.listening) gps.start() else gps.stop()
         alerts(st)
         val text = when {
             st.listening -> (if (st.radio.mode == "voice") "Listening to road channels" else "Listening for EOT") +
                 (if (st.online) "" else " (offline, events kept)")
+            st.radio.attached && reconnect.tries > 0 -> "No data from the dongle; reconnecting"
             st.radio.attached -> "Dongle connected, starting"
             else -> usb.status
         }

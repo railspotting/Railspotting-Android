@@ -125,6 +125,18 @@ class Dongle(private val context: Context, private val onChange: () -> Unit) {
         poll()
     }
 
+    /**
+     * Open the dongle's connection afresh: the core has had no data from it. After a USB I/O
+     * error or a port reset the old connection is dead, though the dongle may still be listed.
+     * If it is gone, or needs USB access again, [poll] says so.
+     */
+    @Synchronized
+    fun reconnect(why: String) {
+        Log.w(TAG, "reopening the dongle: $why")
+        close("Reconnecting to the dongle")
+        poll()
+    }
+
     @Synchronized
     private fun open(dev: UsbDevice) {
         if (conn != null) return
