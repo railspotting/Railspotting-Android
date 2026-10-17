@@ -5,10 +5,11 @@
 use crate::agent;
 use crate::link::{self, Device};
 use crate::radio::{self, Mode};
-use crate::{logbuf, StartArgs, CORE};
+use crate::{logbuf, trains, StartArgs, CORE};
 use jni::objects::{JByteArray, JClass, JString};
 use jni::sys::{jboolean, jbyteArray, jdouble, jfloatArray, jint, jstring, JNI_FALSE};
 use jni::JNIEnv;
+use railspotting_proto::api::ApiClient;
 use serde_json::{json, Value};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
@@ -137,6 +138,64 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_link(
         }
     });
     wipe(&mut s);
+    out(&mut env, r.to_string())
+}
+
+// train reports (proposed v1.13; trains.rs) --------------------------------------------------
+
+/// A signed client for the phone's own device, without the receiver running.
+fn device_client(env: &mut JNIEnv, server: &JString, seed: &JByteArray, device_id: &JString) -> Result<ApiClient, Value> {
+    let server = text(env, server);
+    let device_id = text(env, device_id);
+    let mut s = bytes(env, seed);
+    let key = link::key_from_seed(&s);
+    wipe(&mut s);
+    let key = key.map_err(|e| json!({"ok": false, "error": "bad_key", "message": e}))?;
+    link::client(&server, &key, Some(device_id), CORE.skew.clock()).map_err(|e| link::error_json(&e))
+}
+
+/// Whether the headend takes train reports, from the cached /config in `state_dir`.
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_trainReports(mut env: JNIEnv, _c: JClass, state_dir: JString) -> jboolean {
+    let dir = text(&mut env, &state_dir);
+    let on = guard(false, || trains::enabled(&railspotting_common::load_cached_config(std::path::Path::new(&dir))));
+    on as jboolean
+}
+
+/// Trains the headend knows near the phone: `{"ok": true, "trains": [...]}` or an error.
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_nearbyTrains(
+    mut env: JNIEnv, _c: JClass, server: JString, seed: JByteArray, device_id: JString, lat: jdouble, lon: jdouble) -> jstring {
+    let r = match device_client(&mut env, &server, &seed, &device_id) {
+        Ok(api) => guard(json!({"ok": false, "error": "internal"}), || {
+            let r = trains::nearby(&api, lat, lon);
+            CORE.skew.absorb(&api);
+            r
+        }),
+        Err(e) => e,
+    };
+    out(&mut env, r.to_string())
+}
+
+/// Report a train: `input` is what the owner entered, `fix` the phone's position.
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_reportTrain(
+    mut env: JNIEnv, _c: JClass, server: JString, seed: JByteArray, device_id: JString, input: JString, fix: JString) -> jstring {
+    let input: Value = serde_json::from_str(&text(&mut env, &input)).unwrap_or(Value::Null);
+    let fix: Value = serde_json::from_str(&text(&mut env, &fix)).unwrap_or(Value::Null);
+    let r = match device_client(&mut env, &server, &seed, &device_id) {
+        Ok(api) => guard(json!({"ok": false, "error": "internal"}), || {
+            match trains::sighting_body(&input, &fix, (CORE.skew.clock())()) {
+                Ok(body) => {
+                    let r = trains::report(&api, &body);
+                    CORE.skew.absorb(&api);
+                    r
+                }
+                Err(message) => json!({"ok": false, "error": "invalid", "message": message}),
+            }
+        }),
+        Err(e) => e,
+    };
     out(&mut env, r.to_string())
 }
 

@@ -41,8 +41,10 @@ import androidx.core.content.ContextCompat
 import com.railspotting.android.BuildConfig
 import com.railspotting.android.RailSpottingApp
 import com.railspotting.android.Urls
+import com.railspotting.android.core.Native
 import com.railspotting.android.store.Linked
 import com.railspotting.android.store.Prefs
+import com.railspotting.android.trains.ReportTrainDialog
 import com.railspotting.android.update.Updater
 
 /** Opens the menu; null when there is none (signed out). The header's logo uses it. */
@@ -53,6 +55,8 @@ val LocalOpenMenu = compositionLocalOf<(() -> Unit)?> { null }
 fun MenuSheet(activity: Activity, app: RailSpottingApp, linked: Linked, onClose: () -> Unit, onSignedOut: () -> Unit) {
     var confirm by remember { mutableStateOf(false) }
     var about by remember { mutableStateOf(false) }
+    var reporting by remember { mutableStateOf(false) }
+    val reports = remember { Native.trainReports(app.stateDir.absolutePath) }
     ModalDrawerSheet {
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
@@ -63,6 +67,10 @@ fun MenuSheet(activity: Activity, app: RailSpottingApp, linked: Linked, onClose:
             HorizontalDivider()
             ReceiverInfo(activity, linked)
             HorizontalDivider()
+            if (reports) {
+                OutlinedButton(onClick = { reporting = true }, modifier = Modifier.fillMaxWidth()) { Text("Report a train") }
+                HorizontalDivider()
+            }
             ListeningSettings(app)
             HorizontalDivider()
             AlertSettings(app)
@@ -74,6 +82,7 @@ fun MenuSheet(activity: Activity, app: RailSpottingApp, linked: Linked, onClose:
         }
     }
     if (about) AboutScreen(activity) { about = false }
+    if (reporting) ReportTrainDialog(app) { reporting = false }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },

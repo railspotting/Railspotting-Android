@@ -15,6 +15,7 @@ pub mod location;
 pub mod logbuf;
 pub mod nearby;
 pub mod radio;
+pub mod trains;
 
 #[cfg(target_os = "android")]
 mod jni_api;

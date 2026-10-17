@@ -54,6 +54,10 @@ pub struct State {
     pub plan_by_location: bool,
     pub refreshes: u32,
     pub last_refresh: Option<f64>,
+    /// The proposed v1.13: trains the headend knows, with where they were last seen, and the
+    /// owner's reports.
+    pub trains: Vec<Value>,
+    pub sightings: Vec<Value>,
 }
 
 /// Charlotte is north of this latitude in the fake: its own channel plan.
@@ -387,6 +391,36 @@ fn handle(s: &mut State, req: &Req) -> Reply {
                 answer["config_version"] = json!(s.version());
             }
             ok(s, 200, answer)
+        }
+        "/api/v1/trains/nearby" => {
+            let q = |k: &str| req.path.split(['?', '&']).find_map(|p| p.strip_prefix(&format!("{k}=")))
+                .and_then(|v| v.parse::<f64>().ok());
+            let (Some(lat), Some(lon)) = (q("lat"), q("lon")) else { return err(s, 400, "bad_request") };
+            let radius = q("radius_km").unwrap_or(10.0);
+            let mut near: Vec<Value> = s.trains.iter().filter_map(|t| {
+                let d = km((lat, lon), (t["lat"].as_f64()?, t["lon"].as_f64()?));
+                (d <= radius).then(|| {
+                    let mut t = t.clone();
+                    t["distance_km"] = json!((d * 10.0).round() / 10.0);
+                    t
+                })
+            }).collect();
+            near.sort_by(|a, b| a["distance_km"].as_f64().partial_cmp(&b["distance_km"].as_f64()).unwrap());
+            ok(s, 200, json!({"trains": near}))
+        }
+        "/api/v1/sightings" => {
+            let has = ["locomotives", "body", "link"].iter().any(|k| body.get(*k).is_some()) || body.get("cars").is_some();
+            if !has || body.get("lat").is_none() {
+                return err(s, 422, "invalid");
+            }
+            s.sightings.push(body.clone());
+            let id = s.sightings.len();
+            let mut answer = json!({"sighting_id": id});
+            if let Some(t) = body.get("train_id") {
+                answer["note_id"] = json!(id + 100);
+                answer["url"] = json!(format!("https://railspotting.com/trains/{t}"));
+            }
+            ok(s, 201, answer)
         }
         "/api/v1/reports" => {
             s.reports.push(body);
