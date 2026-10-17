@@ -28,6 +28,7 @@ import com.railspotting.android.core.Status
 import com.railspotting.android.location.Fixes
 import com.railspotting.android.location.LocationFeed
 import com.railspotting.android.ui.MainActivity
+import com.railspotting.android.update.Updater
 import com.railspotting.android.usb.Dongle
 import com.railspotting.android.usb.Reconnect
 import org.json.JSONObject
@@ -160,6 +161,7 @@ class ListenService : Service() {
 
     private fun onStatus(st: Status) {
         if (!started) return
+        Updater.maybeCheck(this) // at most daily; downloads now, installs once listening stops
         st.signedOut?.let {
             signedOutByServer(it)
             return
@@ -248,6 +250,8 @@ class ListenService : Service() {
         gps.stop()
         usb.stop()
         running = false
+        // an update that waited for listening to stop
+        Updater.installPending(this)
         if (started) {
             started = false
             // stopping waits for a last upload; never on the main thread

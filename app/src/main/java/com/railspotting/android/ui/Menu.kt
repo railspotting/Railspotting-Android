@@ -33,13 +33,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.railspotting.android.BuildConfig
 import com.railspotting.android.RailSpottingApp
 import com.railspotting.android.Urls
 import com.railspotting.android.store.Linked
 import com.railspotting.android.store.Prefs
+import com.railspotting.android.update.Updater
 
 /** Opens the menu; null when there is none (signed out). The header's logo uses it. */
 val LocalOpenMenu = compositionLocalOf<(() -> Unit)?> { null }
@@ -62,6 +66,8 @@ fun MenuSheet(activity: Activity, app: RailSpottingApp, linked: Linked, onClose:
             ListeningSettings(app)
             HorizontalDivider()
             AlertSettings(app)
+            HorizontalDivider()
+            UpdateSettings(app)
             HorizontalDivider()
             TextButton(onClick = { about = true }) { Text("About") }
             OutlinedButton(onClick = { confirm = true }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
@@ -115,6 +121,38 @@ private fun ReceiverInfo(activity: Activity, linked: Linked) {
                 "an admin approves it.", style = MaterialTheme.typography.bodySmall)
         }
         TextButton(onClick = { activity.openWeb(Urls.ACCOUNT) }) { Text("Open My receivers") }
+    }
+}
+
+/** Updates from the app's GitHub releases (update/Updater.kt). */
+@Composable
+private fun UpdateSettings(app: RailSpottingApp) {
+    val ctx = LocalContext.current
+    var auto by remember { mutableStateOf(app.prefs.autoUpdate) }
+    var status by remember { mutableStateOf(app.prefs.updateStatus) }
+    var checking by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MenuTitle("Updates")
+        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Install new versions automatically", Modifier.weight(1f))
+            Switch(checked = auto, onCheckedChange = { auto = it; app.prefs.autoUpdate = it })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(enabled = !checking, onClick = {
+                checking = true
+                Updater.checkNow(ctx) {
+                    ContextCompat.getMainExecutor(ctx).execute {
+                        checking = false
+                        status = app.prefs.updateStatus
+                    }
+                }
+            }) { Text(if (checking) "Checking…" else "Check now") }
+            status?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)) }
+        }
+        Text("New versions come from the app's releases on GitHub. They install when the phone isn't " +
+            "listening; Android asks you to confirm the first one.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

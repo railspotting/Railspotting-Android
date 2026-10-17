@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import com.railspotting.android.RailSpottingApp
 import com.railspotting.android.location.LocationFeed
 import com.railspotting.android.service.ListenService
+import com.railspotting.android.update.Updater
 
 class MainActivity : ComponentActivity() {
     private val app get() = RailSpottingApp.of(this)
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         app.foreground = true
+        Updater.maybeCheck(this)
     }
 
     override fun onStop() {

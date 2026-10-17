@@ -52,6 +52,26 @@ class Prefs(context: Context) {
         get() = sp.getInt(NEARBY_MILES, 50).takeIf { it in RADII } ?: 50
         set(v) = sp.edit { putInt(NEARBY_MILES, v) }
 
+    /** Install new versions from the app's GitHub releases by themselves (release builds). */
+    var autoUpdate: Boolean
+        get() = sp.getBoolean(AUTO_UPDATE, true)
+        set(v) = sp.edit { putBoolean(AUTO_UPDATE, v) }
+
+    /** When the app last looked for an update, Unix milliseconds. */
+    var lastUpdateCheck: Long
+        get() = sp.getLong(LAST_UPDATE_CHECK, 0L)
+        set(v) = sp.edit { putLong(LAST_UPDATE_CHECK, v) }
+
+    /** What the last update check or install said, for the menu. */
+    var updateStatus: String?
+        get() = sp.getString(UPDATE_STATUS, null)
+        set(v) = sp.edit { if (v == null) remove(UPDATE_STATUS) else putString(UPDATE_STATUS, v) }
+
+    /** A checked update waiting for listening to stop (its APK in the cache). */
+    var pendingUpdate: String?
+        get() = sp.getString(PENDING_UPDATE, null)
+        set(v) = sp.edit { if (v == null) remove(PENDING_UPDATE) else putString(PENDING_UPDATE, v) }
+
     /** Why the headend signed this phone out, to tell the owner on the sign-in screen. */
     var signedOutReason: String?
         get() = sp.getString(SIGNED_OUT, null)
@@ -78,6 +98,10 @@ class Prefs(context: Context) {
         private const val MODE = "mode"
         private const val GAIN = "gain"
         private const val STAY_AWAKE = "stay_awake"
+        private const val AUTO_UPDATE = "auto_update"
+        private const val LAST_UPDATE_CHECK = "last_update_check"
+        private const val UPDATE_STATUS = "update_status"
+        private const val PENDING_UPDATE = "pending_update"
         private const val ALERT_OWN = "alert_own_eot"
         private const val ALERT_NEARBY = "alert_nearby_eot"
         private const val NEARBY_MILES = "nearby_miles"
