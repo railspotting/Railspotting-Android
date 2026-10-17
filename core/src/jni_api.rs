@@ -181,6 +181,21 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_refreshConfig(
     out(&mut env, r.to_string())
 }
 
+/// Whether the headend takes a chosen crossing and track on a report (cached /config).
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_trainReportPlace(mut env: JNIEnv, _c: JClass, state_dir: JString) -> jboolean {
+    let dir = text(&mut env, &state_dir);
+    let on = guard(false, || trains::place_enabled(&railspotting_common::load_cached_config(std::path::Path::new(&dir))));
+    on as jboolean
+}
+
+/// The lines and crossings within half a mile: `{"ok": true, "lines": [...]}`. Blocks.
+#[no_mangle]
+pub extern "system" fn Java_com_railspotting_android_core_Native_reportPlaces(mut env: JNIEnv, _c: JClass, lat: jdouble, lon: jdouble) -> jstring {
+    let r = guard(json!({"ok": false, "error": "internal"}), || CORE.report_places(lat, lon));
+    out(&mut env, r.to_string())
+}
+
 /// Trains the headend knows near the phone: `{"ok": true, "trains": [...]}` or an error.
 #[no_mangle]
 pub extern "system" fn Java_com_railspotting_android_core_Native_nearbyTrains(

@@ -154,6 +154,16 @@ impl Core {
         }
     }
 
+    /// The lines and crossings within half a mile, for placing a train report. Blocks.
+    pub fn report_places(&self, lat: f64, lon: f64) -> Value {
+        let mut w = self.nearby.lock().unwrap_or_else(|p| p.into_inner());
+        let watcher = w.get_or_insert_with(|| nearby::Watcher::new(nearby::site_fetch(nearby::SITE)));
+        match watcher.places(lat, lon, trains::PLACE_RADIUS_KM, (self.skew.clock())()) {
+            Ok(lines) => json!({"ok": true, "lines": lines}),
+            Err(e) => json!({"ok": false, "error": e}),
+        }
+    }
+
     /// The channel list for where the phone is (`fix`, when the app has one). Blocks for the
     /// headend calls.
     pub fn refresh_plan(&self, fix: &Value) -> Value {

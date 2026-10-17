@@ -156,6 +156,46 @@ pub fn crossings_near(states: &[Value], lat: f64, lon: f64, radius_km: f64, limi
     out.into_iter().take(limit).map(|(_, _, v)| v).collect()
 }
 
+/// A railroad line: (railroad, subdivision).
+type LineKey = (String, String);
+
+/// Where a train report can be placed (proposed v1.14): the lines near the phone (railroad and
+/// subdivision, from the crossings within `radius_km`), each with its crossings, nearest first.
+pub fn places_near(states: &[Value], lat: f64, lon: f64, radius_km: f64) -> Value {
+    let here = point(lat, lon);
+    let mut seen = HashSet::new();
+    let mut lines: Vec<(LineKey, Vec<(f64, Value)>)> = vec![];
+    for state in states {
+        for c in state.get("crossings").and_then(Value::as_array).into_iter().flatten() {
+            let (Some(id), Some(clat), Some(clon)) = (c.get("id").and_then(Value::as_str), c.get("lat").and_then(Value::as_f64),
+                                                       c.get("lon").and_then(Value::as_f64)) else { continue };
+            if !seen.insert(id.to_string()) {
+                continue;
+            }
+            let km = distance_m(&here, &point(clat, clon)) / 1000.0;
+            if km > radius_km {
+                continue;
+            }
+            let text = |k: &str| c.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+            let key = (text("railroad"), text("subdivision"));
+            let crossing = json!({"id": id, "street": text("street"), "city": text("city"), "milepost": text("milepost"),
+                                  "distance_km": (km * 1000.0).round() / 1000.0});
+            match lines.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, list)) => list.push((km, crossing)),
+                None => lines.push((key, vec![(km, crossing)])),
+            }
+        }
+    }
+    for (_, list) in &mut lines {
+        list.sort_by(|a, b| a.0.total_cmp(&b.0));
+    }
+    lines.sort_by(|a, b| a.1[0].0.total_cmp(&b.1[0].0));
+    Value::Array(lines.into_iter().map(|((railroad, subdivision), list)| json!({
+        "railroad": railroad, "subdivision": subdivision,
+        "crossings": list.into_iter().map(|(_, c)| c).collect::<Vec<_>>(),
+    })).collect())
+}
+
 /// A region's state is fetched at most this often (the car screen and the alert check share it).
 pub const STATE_FRESH_S: f64 = 30.0;
 
@@ -203,6 +243,18 @@ impl Watcher {
             }
         }
         Ok(crossings_near(&states, lat, lon, radius_km, limit))
+    }
+
+    /// The lines and crossings near the phone for a train report (`places_near`).
+    pub fn places(&mut self, lat: f64, lon: f64, radius_km: f64, now: f64) -> Result<Value, String> {
+        let mut states = vec![];
+        for slug in self.near(lat, lon, radius_km, now)? {
+            match self.state(&slug, now) {
+                Ok(s) => states.push(s),
+                Err(e) => log::debug!("live map state for {slug}: {e}"),
+            }
+        }
+        Ok(places_near(&states, lat, lon, radius_km))
     }
 
     /// New EOT alerts within `radius_km` of the phone, nearest first.
@@ -361,5 +413,25 @@ mod tests {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.iter().filter(|p| p.as_str() == "/api/public/regions").count(), 1);
         assert!(calls.iter().all(|p| !p.contains("ns-clt")));
+    }
+
+    #[test]
+    fn report_places_by_line_nearest_first() {
+        let state = json!({"crossings": [
+            {"id": "900001A", "railroad": "NS", "subdivision": "Main Line", "street": "Elm St", "city": "Springfield", "milepost": "12.3", "lat": 34.852, "lon": -82.394},
+            {"id": "900002B", "railroad": "NS", "subdivision": "Main Line", "street": "Oak St", "city": "Springfield", "milepost": "12.8", "lat": 34.856, "lon": -82.394},
+            {"id": "900003C", "railroad": "CSX", "subdivision": "River Sub", "street": "Mill Rd", "city": "Springfield", "milepost": "4.1", "lat": 34.853, "lon": -82.398},
+            {"id": "900004D", "railroad": "CSX", "subdivision": "River Sub", "street": "Far Rd", "city": "Springfield", "lat": 34.90, "lon": -82.39},
+        ]});
+        // half a mile from 34.851, -82.394
+        let got = places_near(&[state.clone(), state], 34.851, -82.394, 0.8047);
+        let lines = got.as_array().unwrap();
+        assert_eq!(lines.len(), 2);
+        assert_eq!((lines[0]["railroad"].as_str(), lines[0]["subdivision"].as_str()), (Some("NS"), Some("Main Line")));
+        let ids: Vec<&str> = lines[0]["crossings"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["900001A", "900002B"], "nearest first, each once although two regions list them");
+        assert_eq!(lines[1]["crossings"].as_array().unwrap().len(), 1, "the far crossing is outside half a mile");
+        assert_eq!(lines[0]["crossings"][0]["milepost"], "12.3");
+        assert!(lines[0]["crossings"][0]["distance_km"].as_f64().unwrap() < 0.2);
     }
 }

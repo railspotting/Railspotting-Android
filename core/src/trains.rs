@@ -16,6 +16,16 @@ pub const MAX_LINK: usize = 600;
 pub const MAX_CARS: i64 = 500;
 /// How far around the phone to look for trains, and how far back.
 pub const NEARBY_KM: f64 = 10.0;
+/// Crossings offered for placing a report: within half a mile.
+pub const PLACE_RADIUS_KM: f64 = 0.8047;
+/// Track numbers the owner can give (Main 1, Main 2, ...).
+pub const MAX_TRACK: i64 = 9;
+
+/// Whether the headend takes a chosen crossing and track on a report (proposed v1.14,
+/// `mobile.train_report_place`). Before that, its strict decoding refuses them.
+pub fn place_enabled(cfg: &Value) -> bool {
+    cfg.get("mobile").and_then(|m| m.get("train_report_place")).and_then(Value::as_bool) == Some(true)
+}
 
 /// Whether the headend takes train reports (its cached /config says so).
 pub fn enabled(cfg: &Value) -> bool {
@@ -88,6 +98,21 @@ pub fn sighting_body(input: &Value, fix: &Value, now: f64) -> Result<Value, Stri
     }
     if let Some(n) = cars {
         o.insert("cars".into(), json!(n));
+    }
+    // where (v1.14): the crossing the owner picked, and the track number
+    if let Some(id) = input.get("crossing_id").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()) {
+        if id.len() > 16 || !id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err("Crossing: not a crossing ID".into());
+        }
+        o.insert("crossing_id".into(), json!(id));
+    }
+    match input.get("track") {
+        None | Some(Value::Null) => {}
+        Some(v) => {
+            let n = v.as_i64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())).filter(|n| (1..=MAX_TRACK).contains(n))
+                .ok_or(format!("Track: a number from 1 to {MAX_TRACK}"))?;
+            o.insert("track".into(), json!(n));
+        }
     }
     Ok(Value::Object(o))
 }
@@ -180,6 +205,18 @@ mod tests {
         assert!(sighting_body(&json!({"link": "https://youtu.be/dQw4w9WgXcQ"}), &fix(), AT).is_ok());
         assert!(sighting_body(&json!({"cars": 0}), &fix(), AT).is_ok(), "zero cars is a detail");
         assert_eq!(sighting_body(&json!({"body": "x"}), &json!({}), AT).unwrap_err(), "The phone's position is not known yet");
+    }
+
+    #[test]
+    fn a_report_placed_at_a_crossing_and_track() {
+        let b = sighting_body(&json!({"cars": 40, "crossing_id": "900001A", "track": "2"}), &fix(), AT).unwrap();
+        assert!(b["crossing_id"] == "900001A" && b["track"] == 2, "{b}");
+        assert!(sighting_body(&json!({"cars": 40, "track": 0}), &fix(), AT).unwrap_err().starts_with("Track"));
+        assert!(sighting_body(&json!({"cars": 40, "crossing_id": "../x"}), &fix(), AT).unwrap_err().starts_with("Crossing"));
+        let b = sighting_body(&json!({"cars": 40, "crossing_id": " ", "track": null}), &fix(), AT).unwrap();
+        assert!(b.get("crossing_id").is_none() && b.get("track").is_none());
+        assert!(place_enabled(&json!({"mobile": {"train_report_place": true}})));
+        assert!(!place_enabled(&json!({"mobile": {"train_reports": true}})));
     }
 
     #[test]
