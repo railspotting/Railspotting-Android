@@ -125,11 +125,12 @@ private fun ListeningSettings(app: RailSpottingApp) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         MenuTitle("Listening")
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Keep the screen on while listening", Modifier.weight(1f))
+            Text("Keep the screen on while RailSpotting is open", Modifier.weight(1f))
             Switch(checked = awake, onCheckedChange = { awake = it; app.prefs.stayAwake = it })
         }
-        Text("Stops the phone locking, which on some phones cuts the dongle off until it is allowed USB " +
-            "access again. The screen dims outside the app. Uses more battery: best on a charger or in a car mount.",
+        Text("While listening with RailSpotting on screen, the phone doesn't lock. On phones with USB " +
+            "protection (Advanced Protection) locking cuts the dongle off; Android lets an app keep the " +
+            "screen on only while it is showing. Uses more battery: best on a charger or in a car mount.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
