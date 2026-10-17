@@ -100,6 +100,23 @@ fn media_link(link: &str) -> bool {
         .contains(&host)
 }
 
+/// Fetch /config now, signed as the phone, and keep it where the receiver keeps its own copy.
+/// Train reports work without listening, so the app learns whether the headend takes them
+/// without waiting for the receiver to run. `{"ok": true, "train_reports": bool}` or an error.
+pub fn refresh_config(api: &ApiClient, state_dir: &std::path::Path) -> Value {
+    match api.get_config(None) {
+        Ok((Some(cfg), etag)) => {
+            if let Err(e) = railspotting_common::save_cached_config(state_dir, &cfg, etag.as_deref()) {
+                log::warn!("could not save the headend's settings: {e}");
+            }
+            json!({"ok": true, "train_reports": enabled(&cfg)})
+        }
+        // nothing new: what is kept still holds
+        Ok((None, _)) => json!({"ok": true, "train_reports": enabled(&railspotting_common::load_cached_config(state_dir))}),
+        Err(e) => crate::link::error_json(&e),
+    }
+}
+
 /// POST /sightings. `{"ok": true, ...the headend's answer}` or an error object.
 pub fn report(api: &ApiClient, body: &Value) -> Value {
     match api.request("POST", "/sightings", Some(body), true, &[], "", true).and_then(|r| r.json()) {

@@ -94,6 +94,10 @@ fun AppScreen(activity: Activity, app: RailSpottingApp, openTab: String? = null,
     DisposableEffect(Unit) {
         onDispose { if (map.isInitialized()) map.value.destroy() }
     }
+    // the Saw a train button: ask the headend once signed in, whether listening or not
+    LaunchedEffect(linked?.deviceId) {
+        if (linked != null) withContext(Dispatchers.IO) { app.refreshTrainReports() }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             linked = app.prefs.linked

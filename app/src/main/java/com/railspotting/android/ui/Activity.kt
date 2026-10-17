@@ -81,7 +81,7 @@ fun ActivityScreen(app: RailSpottingApp, st: Status, listening: Boolean) {
     }
 
     var reporting by remember { mutableStateOf(false) }
-    val reports = remember { Native.trainReports(app.stateDir.absolutePath) }
+    val reports by app.trainReports
     if (reporting) ReportTrainDialog(app) { reporting = false }
 
     Page {

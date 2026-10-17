@@ -308,7 +308,7 @@ fn handle(s: &mut State, req: &Req) -> Reply {
                     ],
                     "upload": {"max_batch": 200, "flush_interval_s": 0.5},
                     "mobile": {"heartbeat_interval_s": s.heartbeat_s, "location_interval_s": 120, "location_min_move_m": 100,
-                               "reach_km": 3, "share": true, "plan_by_location": s.plan_by_location},
+                               "reach_km": 3, "share": true, "plan_by_location": s.plan_by_location, "train_reports": true},
                 });
                 if s.plan_by_location {
                     cfg["plan"] = json!({"id": 2, "name": "NS Charlotte", "region": "ns-clt", "source": "location"});
@@ -326,7 +326,7 @@ fn handle(s: &mut State, req: &Req) -> Reply {
                 ],
                 "upload": {"max_batch": 200, "flush_interval_s": 0.5},
                 "mobile": {"heartbeat_interval_s": s.heartbeat_s, "location_interval_s": 120, "location_min_move_m": 100,
-                           "reach_km": 3, "share": true, "plan_by_location": s.plan_by_location},
+                           "reach_km": 3, "share": true, "plan_by_location": s.plan_by_location, "train_reports": true},
             });
             ok(s, 200, cfg)
         }
