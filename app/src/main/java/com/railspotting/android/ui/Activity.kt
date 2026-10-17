@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +47,7 @@ import com.railspotting.android.core.PlanInfo
 import com.railspotting.android.core.Status
 import com.railspotting.android.location.Fixes
 import com.railspotting.android.location.LocationFeed
+import com.railspotting.android.trains.ReportTrainDialog
 import com.railspotting.android.store.Prefs
 import java.time.Instant
 import java.time.ZoneId
@@ -78,7 +80,18 @@ fun ActivityScreen(app: RailSpottingApp, st: Status, listening: Boolean) {
         Native.reopen.execute { Native.setMode(m) }
     }
 
+    var reporting by remember { mutableStateOf(false) }
+    val reports = remember { Native.trainReports(app.stateDir.absolutePath) }
+    if (reporting) ReportTrainDialog(app) { reporting = false }
+
     Page {
+        if (reports) {
+            Section("Saw a train?") {
+                Text("Tell RailSpotting about it: locomotives, cars, a note or a video, on a train it already " +
+                    "knows near you or a new one.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = { reporting = true }) { Text("Report a train") }
+            }
+        }
         Section("Radio") {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 SegmentedButton(selected = mode == "voice", onClick = { choose("voice") },

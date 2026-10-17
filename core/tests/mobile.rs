@@ -8,6 +8,7 @@ use railspotting_mobile::agent::{Agent, Options, Phone};
 use railspotting_mobile::link::{self, Device, SkewClock};
 use railspotting_mobile::location::Fix;
 use railspotting_mobile::radio::Mode;
+use railspotting_mobile::trains;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -462,4 +463,46 @@ fn status_never_waits_on_the_radio_while_events_arrive() {
     }
     assert!(fake.st().events.iter().any(|e| e["state"] == "closed"));
     a.stop();
+}
+
+#[test]
+fn reports_a_train_by_hand() {
+    // proposed v1.13: trains near the phone, then a report on one of them or on none
+    let fake = Fake::start();
+    let skew = SkewClock::new();
+    let (seed, r) = sign_in(&fake, "fay", &skew);
+    let dev = r.unwrap().1["device_id"].as_str().unwrap().to_string();
+    fake.st().trains = vec![
+        json!({"id": 812, "unit": "76520", "railroad": "NS", "motion": "stopped", "last": 1_792_000_000.0, "lat": 34.86, "lon": -82.39}),
+        json!({"id": 900, "unit": "11111", "railroad": "CSX", "motion": "moving", "last": 1_792_000_000.0, "lat": 35.50, "lon": -80.80}),
+    ];
+    let key = link::key_from_seed(&seed).unwrap();
+    let api = link::client(&fake.url(), &key, Some(dev.clone()), skew.clock()).unwrap();
+
+    // only the train within reach, signed as the phone (not listening: no receiver running)
+    let near = trains::nearby(&api, 34.85, -82.39);
+    assert_eq!(near["ok"], true, "{near}");
+    let list = near["trains"].as_array().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!((list[0]["id"].as_i64(), list[0]["unit"].as_str()), (Some(812), Some("76520")));
+
+    // on that train
+    let fix = json!({"lat": 34.85, "lon": -82.39, "accuracy_m": 9.0});
+    let body = trains::sighting_body(&json!({"train_id": 812, "locomotives": "NS 4321", "cars": "88"}), &fix, 1_792_000_100.0).unwrap();
+    let r = trains::report(&api, &body);
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r["url"].as_str().unwrap().ends_with("/trains/812"));
+    // on none
+    let body = trains::sighting_body(&json!({"body": "Coal train, no EOT heard"}), &fix, 1_792_000_200.0).unwrap();
+    let r = trains::report(&api, &body);
+    assert!(r["ok"] == true && r.get("url").is_none(), "{r}");
+    let got = fake.st().sightings.clone();
+    assert_eq!(got.len(), 2);
+    assert_eq!((got[0]["train_id"].as_i64(), got[0]["cars"].as_i64()), (Some(812), Some(88)));
+    assert!(got[1].get("train_id").is_none());
+
+    // a headend without v1.13 says so in words
+    let other = link::client(&fake.url(), &key, Some(dev), skew.clock()).unwrap();
+    let r = other.request("GET", "/trains/unknown", None, true, &[], "", true);
+    assert_eq!(r.unwrap_err().status, Some(404));
 }

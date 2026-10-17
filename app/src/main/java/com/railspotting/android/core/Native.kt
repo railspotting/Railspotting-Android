@@ -84,6 +84,18 @@ object Native {
     /** The dongle's tuner gain: "auto" or dB ("40.2"). The dongle reopens with it. */
     @JvmStatic external fun setGain(gain: String)
 
+    /** The headend takes train reports (its cached /config, in `stateDir`). Proposed v1.13. */
+    @JvmStatic external fun trainReports(stateDir: String): Boolean
+
+    /** Trains near the phone: `{"ok": true, "trains": [...]}` or an error. Blocks; works without listening. */
+    @JvmStatic external fun nearbyTrains(server: String, seed: ByteArray, deviceId: String, lat: Double, lon: Double): String
+
+    /**
+     * Report a train: `input` is `{"train_id"?, "locomotives", "cars", "body", "link"}`, `fix` a
+     * LocationFix. `{"ok": true, "url"?: ...}` or `{"ok": false, "message": ...}`. Blocks.
+     */
+    @JvmStatic external fun reportTrain(server: String, seed: ByteArray, deviceId: String, input: String, fix: String): String
+
     /** Live listen on or off. */
     @JvmStatic external fun setLive(on: Boolean)
 
