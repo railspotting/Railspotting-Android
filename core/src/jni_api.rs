@@ -108,11 +108,13 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_hello(mut env: 
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_com_railspotting_android_core_Native_link(
     mut env: JNIEnv, _c: JClass, server: JString, seed: JByteArray, id_token: JString, nonce: JString, name: JString,
-    model: JString, android_version: JString, app_version: JString) -> jstring {
+    model: JString, android_version: JString, app_version: JString, integrity_token: JString,
+    integrity_error: JString) -> jstring {
     let server = text(&mut env, &server);
     let id_token = text(&mut env, &id_token);
     let nonce = text(&mut env, &nonce);
     let name = text(&mut env, &name);
+    let integrity = link::Integrity { token: text(&mut env, &integrity_token), error: text(&mut env, &integrity_error) };
     let device = Device {
         model: text(&mut env, &model),
         android_version: text(&mut env, &android_version),
@@ -129,7 +131,7 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_link(
             Err(e) => return link::error_json(&e),
         };
         let pk = railspotting_proto::keys::public_b64(&key);
-        let body = link::link_body(&id_token, &nonce, &pk, Some(&name), &device);
+        let body = link::link_body(&id_token, &nonce, &pk, Some(&name), &device, &integrity);
         let r = link::link(&api, &body);
         CORE.skew.absorb(&api);
         match r {

@@ -115,6 +115,7 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
     implementation(libs.googleid)
+    implementation(libs.play.integrity)
     implementation(libs.play.services.location)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.car.app)

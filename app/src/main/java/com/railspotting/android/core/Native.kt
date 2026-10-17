@@ -33,6 +33,7 @@ object Native {
     @JvmStatic external fun link(
         server: String, seed: ByteArray, idToken: String, nonce: String, name: String,
         model: String, androidVersion: String, appVersion: String,
+        integrityToken: String, integrityError: String,
     ): String
 
     /** Start the receiver. Returns "" when it started, else what went wrong. */

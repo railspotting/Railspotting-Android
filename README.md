@@ -77,6 +77,9 @@ Kept few, all from Google or JetBrains:
 - `androidx.credentials` and `credentials-play-services-auth`, plus Google's `googleid` library,
   for sign-in;
 - `play-services-location` for the fused location provider;
+- Play Integrity (`com.google.android.play:integrity`), asked once when a phone links: the headend
+  checks Google's verdict to decide how far to trust a new phone (proposed contract v1.14). It
+  never blocks linking; builds from source link too, and the headend marks them as such;
 - `androidx.webkit`, to open the live map on the phone's position (a script that runs before the
   page's own).
 
