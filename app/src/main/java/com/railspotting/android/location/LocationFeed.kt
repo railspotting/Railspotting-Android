@@ -42,6 +42,10 @@ class LocationFeed(private val context: Context) {
     fun permitted() = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
+    /** Precise or approximate location: enough for the live map's Here button. */
+    fun permittedAny() = permitted() || ContextCompat.checkSelfPermission(context,
+        Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
     fun start() {
         if (running || !permitted()) return
         val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, INTERVAL_MS)

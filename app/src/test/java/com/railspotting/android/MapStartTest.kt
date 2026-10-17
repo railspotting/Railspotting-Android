@@ -44,4 +44,16 @@ class MapStartTest {
         assertFalse(MapStart.shareLocation("https://railspotting.com.example.com/", true))
         assertFalse(MapStart.shareLocation(null, true))
     }
+
+    @Test
+    fun hereAsksForLocationWhenTheAppHasNone() {
+        val site = "https://railspotting.com/"
+        assertEquals(MapStart.Here.Grant, MapStart.here(site, permitted = true, canAsk = true))
+        // a fresh install has no location permission until listening starts: ask, don't refuse
+        assertEquals(MapStart.Here.Ask, MapStart.here(site, permitted = false, canAsk = true))
+        assertEquals(MapStart.Here.Refuse, MapStart.here(site, permitted = false, canAsk = false))
+        // another site never gets the position, permission or not
+        assertEquals(MapStart.Here.Refuse, MapStart.here("https://example.com/", permitted = true, canAsk = true))
+        assertEquals(MapStart.Here.Refuse, MapStart.here(null, permitted = true, canAsk = true))
+    }
 }

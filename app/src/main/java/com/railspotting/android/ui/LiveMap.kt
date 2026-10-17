@@ -1,5 +1,6 @@
 package com.railspotting.android.ui
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -8,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.view.ViewGroup
-import android.widget.Toast
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.RenderProcessGoneDetail
@@ -16,7 +16,12 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
@@ -52,23 +57,44 @@ fun newMapView(context: Context): WebView = WebView(context).apply {
         setGeolocationEnabled(true)
     }
     webViewClient = MapClient()
-    webChromeClient = object : WebChromeClient() {
-        // target="_blank" links: catch the address in a throwaway view, then hand it to the browser
-        override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
-            val catcher = WebView(view.context)
-            catcher.webViewClient = WindowCatcher(view.context, isUserGesture)
-            (resultMsg.obj as WebView.WebViewTransport).webView = catcher
-            resultMsg.sendToTarget()
-            return true
-        }
+    webChromeClient = MapChrome(context)
+}
 
-        // the Here button: the page asks for the phone's position (MapStart.shareLocation).
-        // Not remembered, so a later change to the app's permission counts.
-        override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback) {
-            val permitted = LocationFeed(context).permitted()
-            callback.invoke(origin, MapStart.shareLocation(origin, permitted), false)
-            if (!permitted) Toast.makeText(context, "Allow location for RailSpotting in Android settings to use Here.", Toast.LENGTH_LONG).show()
+/** The map's chrome client: new windows go to the browser, and the Here button's location. */
+class MapChrome(private val context: Context) : WebChromeClient() {
+    /**
+     * Ask Android for location permission and report whether it was given. The screen showing
+     * the map sets it; without it, Here is refused when the app has no location permission.
+     */
+    var askLocation: ((granted: (Boolean) -> Unit) -> Unit)? = null
+
+    // target="_blank" links: catch the address in a throwaway view, then hand it to the browser
+    override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+        val catcher = WebView(view.context)
+        catcher.webViewClient = WindowCatcher(view.context, isUserGesture)
+        (resultMsg.obj as WebView.WebViewTransport).webView = catcher
+        resultMsg.sendToTarget()
+        return true
+    }
+
+    // the Here button: the page asks for the phone's position (MapStart.shareLocation).
+    // Not remembered, so a later change to the app's permission counts. Without location
+    // permission (a fresh install has none until listening starts) it asks for it here.
+    override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback) {
+        val ask = askLocation
+        when (MapStart.here(origin, LocationFeed(context).permittedAny(), ask != null)) {
+            MapStart.Here.Grant -> callback.invoke(origin, true, false)
+            MapStart.Here.Ask -> ask?.invoke { granted ->
+                if (granted) callback.invoke(origin, true, false) else refused(origin, callback)
+            }
+            MapStart.Here.Refuse -> if (MapStart.shareLocation(origin, true)) refused(origin, callback)
+                else callback.invoke(origin, false, false)
         }
+    }
+
+    private fun refused(origin: String?, callback: GeolocationPermissions.Callback) {
+        callback.invoke(origin, false, false)
+        Toast.makeText(context, "Allow location for RailSpotting in Android settings to use Here.", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -179,6 +205,20 @@ private fun openInBrowser(context: Context, url: String) {
 /** The live map, reusing one web view so switching tabs keeps its place. */
 @Composable
 fun LiveMap(view: WebView, modifier: Modifier = Modifier) {
+    // the Here button asks for location through Android's own prompt
+    val waiting = remember { arrayOfNulls<(Boolean) -> Unit>(1) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        waiting[0]?.invoke(r.values.any { it })
+        waiting[0] = null
+    }
+    DisposableEffect(view) {
+        val chrome = view.webChromeClient as? MapChrome
+        chrome?.askLocation = { done ->
+            waiting[0] = done
+            launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+        onDispose { chrome?.askLocation = null }
+    }
     AndroidView(
         factory = {
             (view.parent as? ViewGroup)?.removeView(view)
