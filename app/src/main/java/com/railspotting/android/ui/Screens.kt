@@ -133,7 +133,7 @@ fun AppScreen(activity: Activity, app: RailSpottingApp, openTab: String? = null,
         CompositionLocalProvider(
             LocalOpenMenu provides openMenu,
             // the listening switch, once signed in
-            LocalHeaderAction provides if (l != null) ({ ListenSwitch(listening, dongle) }) else null,
+            LocalHeaderAction provides if (l != null) ({ ListenSwitch(listening, dongle, streaming = status.radio.connected, attached = status.radio.attached) }) else null,
         ) {
             Scaffold(
                 containerColor = MaterialTheme.colorScheme.background,

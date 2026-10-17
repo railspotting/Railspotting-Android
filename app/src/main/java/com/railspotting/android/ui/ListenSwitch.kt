@@ -33,6 +33,15 @@ import com.railspotting.android.usb.RtlIds
 /** The header's right-hand control (the listening switch); null where there is none. */
 val LocalHeaderAction = compositionLocalOf<(@Composable () -> Unit)?> { null }
 
+/** The word under the switch: what the dongle is actually doing while listening is on. */
+fun switchLabel(listening: Boolean, dongle: Boolean, streaming: Boolean, attached: Boolean): String = when {
+    !listening -> if (dongle) "Off" else "No dongle"
+    streaming -> "Listening"
+    !dongle -> "No dongle"
+    attached -> "No data"
+    else -> "Connecting"
+}
+
 /** A dongle is plugged in (permission or not). */
 fun donglePlugged(ctx: Context): Boolean =
     ctx.getSystemService(UsbManager::class.java)?.deviceList?.values?.any { RtlIds.isDongle(it.vendorId, it.productId) } == true
@@ -50,7 +59,7 @@ private enum class Ask { None, Location, Notifications }
  * Android 13 and later, notifications) first, each with a word on why.
  */
 @Composable
-fun ListenSwitch(listening: Boolean, dongle: Boolean) {
+fun ListenSwitch(listening: Boolean, dongle: Boolean, streaming: Boolean = true, attached: Boolean = true) {
     val ctx = LocalContext.current
     var ask by remember { mutableStateOf(Ask.None) }
 
@@ -87,10 +96,16 @@ fun ListenSwitch(listening: Boolean, dongle: Boolean) {
             },
             modifier = Modifier.semantics { contentDescription = "Listening" },
         )
+        // on but no samples: say so, rather than "Listening"
+        val stalled = listening && !streaming
         Text(
-            if (listening) "Listening" else if (dongle) "Off" else "No dongle",
+            switchLabel(listening, dongle, streaming, attached),
             style = MaterialTheme.typography.labelSmall,
-            color = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = when {
+                stalled -> MaterialTheme.colorScheme.error
+                listening -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 
