@@ -150,8 +150,27 @@ The same four values can come from the environment instead: `RS_KEYSTORE`, `RS_K
     ./gradlew assembleRelease     # app/build/outputs/apk/release/
     ./gradlew bundleRelease       # app/build/outputs/bundle/release/, for Google Play
 
-Keep the upload key and its passwords in a password manager. On Google Play, use Play App Signing:
-Google holds the app signing key, and you sign uploads with this one.
+Keep the key and its passwords in a password manager, with a backup. Phones that installed a
+release only accept updates signed with the same key: lose it and every phone has to uninstall and
+reinstall. If the app ever goes on Google Play, use Play App Signing there.
+
+### Releases and updates
+
+The app updates itself from this repository's GitHub releases, without a store
+(`app/src/main/java/com/railspotting/android/update/`). Each release carries the signed APK and
+`latest.json` (version code and name, the APK's address, its SHA-256, notes). Release builds
+look at `releases/latest/download/latest.json` once a day and from the menu's *Check now*. A newer
+version is downloaded, checked (SHA-256, package name, version, and the same signing key as the
+installed app) and installed through Android's installer, never while listening. Android asks the
+owner to confirm the first update; later ones install by themselves (Android 12 and later).
+Debug builds never update themselves.
+
+To publish a release (version name and notes):
+
+    tools/release.sh 0.2.0 "What changed"
+
+The version code goes up by one each time (`app/version.properties`). The repository must be
+public for phones to download releases.
 
 ## Google Cloud setup (the owner does this once)
 

@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- updates from the app's GitHub releases (update/Updater.kt) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android Auto: the Nearby screen's map (PlaceListMapTemplate) -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
@@ -76,5 +78,9 @@
             android:name=".service.ListenService"
             android:exported="false"
             android:foregroundServiceType="location|connectedDevice" />
+            <receiver
+            android:name=".update.InstallResult"
+            android:exported="false" />
+
     </application>
 </manifest>

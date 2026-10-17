@@ -12,6 +12,9 @@ val signing = Properties().apply {
 }
 fun signingValue(key: String, env: String): String? = signing.getProperty(key) ?: System.getenv(env)
 
+// The app's version (app/version.properties), which releases and the updater compare.
+val version = Properties().apply { file("version.properties").inputStream().use { load(it) } }
+
 // The Rust core (core/), built for each ABI with cargo-ndk into build/rustJniLibs.
 val abis = listOf("arm64-v8a", "x86_64")
 val rustOut = layout.buildDirectory.dir("rustJniLibs")
@@ -27,8 +30,9 @@ android {
         applicationId = "com.railspotting.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // tools/release.sh bumps these
+        versionCode = version.getProperty("code").toInt()
+        versionName = version.getProperty("name")
         ndk { abiFilters += abis }
     }
 
