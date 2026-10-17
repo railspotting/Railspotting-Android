@@ -32,6 +32,20 @@ object MapStart {
     fun shareLocation(origin: String?, permitted: Boolean): Boolean =
         permitted && origin?.trimEnd('/') == ORIGIN
 
+    enum class Here { Grant, Ask, Refuse }
+
+    /**
+     * What to answer the Here button: the map's own site gets the position when the app has
+     * location permission (precise or approximate); without it, the app asks Android first
+     * when it can. Any other site never gets it.
+     */
+    fun here(origin: String?, permitted: Boolean, canAsk: Boolean): Here = when {
+        !shareLocation(origin, true) -> Here.Refuse
+        permitted -> Here.Grant
+        canAsk -> Here.Ask
+        else -> Here.Refuse
+    }
+
     /** The script that sets the start position (runs before the page's own scripts). */
     fun script(lat: Double, lon: Double, zoom: Int): String {
         val pos = JSONObject().put("lat", round5(lat)).put("lon", round5(lon)).put("zoom", zoom)
