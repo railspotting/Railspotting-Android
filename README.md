@@ -11,6 +11,11 @@ The one dongle works in one of two modes, which the owner switches on the Activi
 - **Road channels**: watches the voice channels near the phone, with **live listen**, which plays
   the call on the air.
 
+**Using it:** the app reports to RailSpotting ([railspotting.com](https://railspotting.com)), a
+service that is not open source. You need a RailSpotting account (sign in with Google) for the
+phone to be a receiver. This repository is the app and its Rust core; the service's API is
+described by the contract documents it publishes.
+
 - Package name: `com.railspotting.android`
 - Android 10 (API 29) or later, 64-bit (arm64; x86_64 for the emulator)
 - Headend: `https://api.railspotting.com/api/v1`
@@ -292,18 +297,19 @@ account. A new mobile receiver is provisional and private, so testing doesn't to
 
 ## Licences
 
-The app ships **librtlsdr (GNU GPL 2.0)** and **libusb (GNU LGPL 2.1)** as their own shared
-libraries, with a small patch to librtlsdr. This was an owner decision of October 2026; the
-receiver only loads librtlsdr from the system.
-- The source, the patch and the build script are in [native/](native/README.md).
+The app's own source is licensed under either of the Apache License 2.0 (`LICENSE-APACHE`) or the
+MIT license (`LICENSE-MIT`), at your option, like the receiver it builds on.
+
+The APK also ships **librtlsdr (GNU GPL 2.0 or later)**, with a small patch, and **libusb (GNU
+LGPL 2.1 or later)** as their own shared libraries; the receiver only loads librtlsdr from the
+system. Because the APK combines GPL code with the app, the APK as a whole is distributed under
+the GNU GPL version 3, which these licences all permit (`NOTICE`).
+- The source of every release is this repository at the release's tag, with its submodules. The
+  librtlsdr patch and the build script are in [native/](native/README.md).
 - The app's menu has **About**: the version, and every piece of open source software in the app
   with its licence and a link to its source. The GPL and LGPL texts ship with the app
   (`app/src/main/assets/licenses`). The list is generated: run `python3 tools/open_source.py` after
   changing dependencies (a test checks it is complete).
-- Anyone who gets the APK must be able to get them.
-- Before the app is published, the maintainers should settle how the GPL bears on it, since the
-  app loads a GPL library into its process. That covers the app's own licence and how the source
-  is offered, given that this repository is private.
 
 ## Repository hygiene
 

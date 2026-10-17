@@ -1,0 +1,18 @@
+RailSpotting for Android
+Copyright (c) 2026 RailSpotting
+
+The app's own source (app/, core/, tools/ and the build files) is licensed under either of the
+Apache License 2.0 (LICENSE-APACHE) or the MIT license (LICENSE-MIT), at your option, like the
+RailSpotting receiver it builds on (the receiver/ submodule).
+
+The app's APK also contains, as their own shared libraries:
+
+- librtlsdr (osmocom rtl-sdr), GNU General Public License version 2 or (at your option) any later
+  version, with a small patch: native/rtl-sdr and native/patches/.
+- libusb, GNU Lesser General Public License version 2.1 or (at your option) any later version:
+  native/libusb.
+
+Because the APK combines GPL code with the app, the APK as a whole is distributed under the terms
+of the GNU General Public License version 3, which the licences above all permit. The complete
+corresponding source of every release is this repository at the release's tag, with its
+submodules; the licence texts also ship inside the app (About in the menu).
