@@ -31,8 +31,8 @@ class Prefs(context: Context) {
         set(v) = sp.edit { putString(GAIN, v) }
 
     /**
-     * Keep the screen on while listening. A locked phone can cut USB: Android's USB protection
-     * (Advanced Protection) resets the port on unlock, and the dongle needs USB access again.
+     * Keep the screen on while listening with the app on screen. A locked phone can cut USB:
+     * Android's USB protection (Advanced Protection) turns USB data off while it is locked.
      */
     var stayAwake: Boolean
         get() = sp.getBoolean(STAY_AWAKE, false)

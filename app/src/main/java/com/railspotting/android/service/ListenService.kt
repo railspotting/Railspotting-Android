@@ -12,7 +12,6 @@ import android.os.BatteryManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -57,8 +56,6 @@ class ListenService : Service() {
     /** Status calls into the core, off the main thread; one at a time. */
     private lateinit var statusBg: ExecutorService
     private val asking = AtomicBoolean(false)
-    /** "Keep the screen on while listening": a dim-screen lock, renewed each tick. */
-    private var awake: PowerManager.WakeLock? = null
     private var lastNearby = 0L
     private val tick = object : Runnable {
         override fun run() {
@@ -163,7 +160,6 @@ class ListenService : Service() {
 
     private fun onStatus(st: Status) {
         if (!started) return
-        keepScreenOn(app.prefs.stayAwake)
         st.signedOut?.let {
             signedOutByServer(it)
             return
@@ -188,24 +184,6 @@ class ListenService : Service() {
             if (usb.connected) startForegroundNow() // add the USB type once the cable is open
             getSystemService(NotificationManager::class.java).notify(NOTE_ID, note(text))
         }
-    }
-
-    /**
-     * Hold or let go of the screen. The lock is taken with a timeout and renewed on each tick, so
-     * it lapses on its own if the service is gone. The dim-screen lock is deprecated in favour of
-     * an activity's FLAG_KEEP_SCREEN_ON, which only works while the app shows; this has to work
-     * from the background too (the app sets the flag as well while it shows).
-     */
-    @Suppress("DEPRECATION")
-    private fun keepScreenOn(on: Boolean) {
-        if (!on) {
-            awake?.takeIf { it.isHeld }?.release()
-            return
-        }
-        val lock = awake ?: getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "RailSpotting:listening")
-            .also { it.setReferenceCounted(false); awake = it }
-        lock.acquire(AWAKE_MS)
     }
 
     /** EOT alerts: what this phone decoded, and other receivers' within the chosen radius. */
@@ -264,7 +242,6 @@ class ListenService : Service() {
     }
 
     override fun onDestroy() {
-        keepScreenOn(false)
         main.removeCallbacks(tick)
         bg.shutdownNow()
         statusBg.shutdownNow()
@@ -300,8 +277,6 @@ class ListenService : Service() {
         private const val NOTE_ID = 1
         private const val SIGNED_OUT_ID = 2
         private const val TICK_MS = 2000L
-        /** The screen lock lapses this long after the last tick. */
-        private const val AWAKE_MS = 60_000L
         private const val NEARBY_EVERY_MS = 60_000L
         private const val ACTION_STOP = "com.railspotting.android.STOP"
         private const val ACTION_DONGLE = "com.railspotting.android.DONGLE"

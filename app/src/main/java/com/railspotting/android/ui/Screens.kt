@@ -105,7 +105,9 @@ fun AppScreen(activity: Activity, app: RailSpottingApp, openTab: String? = null,
             delay(1000)
         }
     }
-    // full brightness while the app shows; the listening service keeps it on, dimmed, elsewhere
+    // while RailSpotting shows. Android ignores an app's own screen lock from the background
+    // (seen on 17 Oct: held for an hour, the phone timed out and locked anyway), so this is all
+    // an app can do
     val keepOn = listening && stayAwake
     DisposableEffect(keepOn) {
         if (keepOn) activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
