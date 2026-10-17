@@ -58,8 +58,12 @@ import org.json.JSONObject
 private sealed interface Step {
     data object NeedLocation : Step
     data object Looking : Step
-    /** `lines` is empty when the headend doesn't take a chosen crossing yet (v1.14). */
-    data class Form(val fix: String, val trains: List<NearTrain>, val lookError: String?, val lines: List<PlaceLine> = listOf()) : Step
+    /**
+     * `place`: the headend takes a chosen crossing and track (v1.14); `lines` are those within
+     * half a mile, which may be none.
+     */
+    data class Form(val fix: String, val trains: List<NearTrain>, val lookError: String?,
+                    val place: Boolean = false, val lines: List<PlaceLine> = listOf()) : Step
     data class Done(val url: String?) : Step
 }
 
@@ -92,12 +96,9 @@ fun ReportTrainDialog(app: RailSpottingApp, onClose: () -> Unit) {
             }
             val (trains, err) = NearTrain.list(answer)
             // the lines and crossings within half a mile, when the headend takes a chosen one
-            val lines = if (Native.trainReportPlace(app.stateDir.absolutePath)) {
-                PlaceLine.list(Native.reportPlaces(at.latitude, at.longitude))
-            } else {
-                listOf()
-            }
-            Step.Form(fix, trains.orEmpty(), err, lines)
+            val place = Native.trainReportPlace(app.stateDir.absolutePath)
+            val lines = if (place) PlaceLine.list(Native.reportPlaces(at.latitude, at.longitude)) else listOf()
+            Step.Form(fix, trains.orEmpty(), err, place, lines)
         }
     }
 
@@ -194,6 +195,12 @@ private fun ReportForm(s: Step.Form, send: suspend (JSONObject) -> String?) {
         Text(if (s.trains.isEmpty()) "A train RailSpotting doesn't know" else "Not listed, or I don't know which")
     }
     HorizontalDivider()
+    if (s.place && s.lines.isEmpty()) {
+        Text("Where", style = MaterialTheme.typography.titleMedium)
+        Text("No crossings within half a mile of you. The report uses your position; RailSpotting " +
+            "places it at the nearest crossing.", style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider()
+    }
     if (s.lines.isNotEmpty()) {
         Text("Where", style = MaterialTheme.typography.titleMedium)
         Choice("Line", s.lines.map { it.label }, line) {
