@@ -1,7 +1,11 @@
 #!/bin/bash
 # Publish a release of the app: the phones running it update themselves (update/Updater.kt).
 #
-#   tools/release.sh 0.2.0 "What changed, in a sentence or two"
+#   tools/release.sh patch "What changed, in a sentence or two"
+#
+# The first argument is the step: patch (0.3.0 to 0.3.1) for fixes and small features, the
+# usual one; minor or major only when the owner decides a release is that big; or an exact
+# version (1.2.3).
 #
 # Needs keystore.properties (the release key, never committed), a clean checkout of main that is
 # up to date, and gh signed in with push access. It bumps app/version.properties, tests and builds
@@ -10,8 +14,16 @@
 # publish only what you would run yourself.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-name="${1:?usage: tools/release.sh <version, e.g. 0.2.0> "<notes>"}"
+step="${1:?usage: tools/release.sh patch|minor|major|<1.2.3> "<notes>"}"
 notes="${2:?give release notes as the second argument}"
+current=$(sed -n 's/^name=//p' app/version.properties)
+IFS=. read -r major minor patch <<< "$current"
+case "$step" in
+    patch) name="$major.$minor.$((patch + 1))" ;;
+    minor) name="$major.$((minor + 1)).0" ;;
+    major) name="$((major + 1)).0.0" ;;
+    *) name="$step" ;;
+esac
 repo="railspotting/Railspotting-Android"
 
 [[ "$name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must look like 1.2.3" >&2; exit 1; }

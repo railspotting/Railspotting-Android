@@ -165,11 +165,13 @@ installed app) and installed through Android's installer, never while listening.
 owner to confirm the first update; later ones install by themselves (Android 12 and later).
 Debug builds never update themselves.
 
-To publish a release (version name and notes):
+To publish a release (the version step and notes):
 
-    tools/release.sh 0.2.0 "What changed"
+    tools/release.sh patch "What changed"
 
-The version code goes up by one each time (`app/version.properties`). The repository must be
+Releases take the smallest step: a fix or a small feature is a patch release (0.3.0 to 0.3.1).
+`minor` and `major` are for when the owner decides a release is that big; an exact version
+(`1.2.3`) also works. The version code goes up by one each time (`app/version.properties`). The repository must be
 public for phones to download releases.
 
 ## Google Cloud setup (the owner does this once)
