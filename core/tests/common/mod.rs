@@ -37,6 +37,8 @@ pub struct State {
     pub heartbeats: Vec<Value>,
     pub events: Vec<Value>,
     pub fixes: Vec<Value>,
+    /// The /mobile/link bodies, as sent.
+    pub links: Vec<Value>,
     pub location_calls: Vec<f64>,
     pub reports: Vec<Value>,
     pub commands: Vec<Value>,
@@ -243,6 +245,7 @@ fn handle(s: &mut State, req: &Req) -> Reply {
                                   "terms_url": "https://example.test/terms", "privacy_url": "https://example.test/privacy"}));
     }
     if path == "/api/v1/mobile/link" {
+        s.links.push(body.clone());
         if req.headers.contains_key("x-rs-device") {
             return err(s, 400, "bad_request");
         }

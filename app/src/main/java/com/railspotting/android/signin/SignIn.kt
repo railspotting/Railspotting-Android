@@ -15,6 +15,7 @@ import com.railspotting.android.BuildConfig
 import com.railspotting.android.RailSpottingApp
 import com.railspotting.android.Urls
 import com.railspotting.android.core.Native
+import com.railspotting.android.integrity.Integrity
 import com.railspotting.android.store.Linked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -119,10 +120,22 @@ class SignIn(private val app: RailSpottingApp) {
     }
 
     private suspend fun link(idToken: String, nonce: String, name: String): JSONObject = withContext(Dispatchers.IO) {
+        // Play Integrity, bound to this sign-in and this key; never blocks the link (v1.14)
+        val integrity = Integrity.request(app, Integrity.nonce(nonce, publicKey()))
         val seed = app.seed()
         try {
             JSONObject(Native.link(Urls.SERVER, seed, idToken, nonce, name, Build.MODEL ?: "",
-                Build.VERSION.RELEASE ?: "", BuildConfig.VERSION_NAME))
+                Build.VERSION.RELEASE ?: "", BuildConfig.VERSION_NAME, integrity.token, integrity.error))
+        } finally {
+            seed.fill(0)
+        }
+    }
+
+    /** The key the link request sends, as the headend sees it. */
+    private fun publicKey(): String {
+        val seed = app.seed()
+        return try {
+            Native.publicKey(seed)
         } finally {
             seed.fill(0)
         }

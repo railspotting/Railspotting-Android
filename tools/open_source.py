@@ -34,6 +34,8 @@ ANDROID = [
     {"name": "AndroidX WebKit", "license": "Apache-2.0", "url": "https://developer.android.com/jetpack/androidx/releases/webkit"},
     {"name": "Google Play services location", "license": "Android Software Development Kit License",
      "url": "https://developers.google.com/android/guides/overview"},
+    {"name": "Play Integrity", "license": "Play Core Software Development Kit Terms of Service",
+     "url": "https://developer.android.com/google/play/integrity"},
 ]
 
 RECEIVER = [

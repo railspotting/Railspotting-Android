@@ -89,8 +89,17 @@ fn cut(s: &str, max: usize) -> String {
     s.trim().chars().take(max).collect()
 }
 
+/// Play Integrity at link time (proposed contract v1.14): the app's token, or why there is none.
+/// The headend weighs it; the link never depends on it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Integrity {
+    pub token: String,
+    pub error: String,
+}
+
 /// The POST /mobile/link body, with each field cut to the contract's length.
-pub fn link_body(id_token: &str, nonce: &str, public_key: &str, name: Option<&str>, device: &Device) -> Value {
+pub fn link_body(id_token: &str, nonce: &str, public_key: &str, name: Option<&str>, device: &Device,
+                 integrity: &Integrity) -> Value {
     let mut body = json!({
         "id_token": id_token,
         "nonce": nonce,
@@ -100,6 +109,13 @@ pub fn link_body(id_token: &str, nonce: &str, public_key: &str, name: Option<&st
     });
     if let Some(n) = name.map(|n| cut(n, 80)).filter(|n| !n.is_empty()) {
         body["name"] = json!(n);
+    }
+    // a token is sent whole (cutting it would break it); without one, the reason
+    if !integrity.token.trim().is_empty() {
+        body["integrity_token"] = json!(integrity.token.trim());
+    } else {
+        let why = cut(&integrity.error, 100);
+        body["integrity_error"] = json!(if why.is_empty() { "NO_TOKEN".to_string() } else { why });
     }
     body
 }
@@ -133,13 +149,28 @@ mod tests {
     #[test]
     fn link_body_cuts_long_fields() {
         let d = Device { model: "M".repeat(150), android_version: "15".into(), app_version: "0.1.0".into() };
-        let b = link_body("tok", "n1", "pk", Some(&"x".repeat(100)), &d);
+        let none = Integrity::default();
+        let b = link_body("tok", "n1", "pk", Some(&"x".repeat(100)), &d, &none);
         assert_eq!(b["device"]["model"].as_str().unwrap().len(), 100);
         assert_eq!(b["name"].as_str().unwrap().len(), 80);
         assert_eq!(b["device"]["android_version"], "15");
         // no name: the headend picks one
-        assert!(link_body("tok", "n1", "pk", Some("  "), &d).get("name").is_none());
-        assert!(link_body("tok", "n1", "pk", None, &d).get("name").is_none());
+        assert!(link_body("tok", "n1", "pk", Some("  "), &d, &none).get("name").is_none());
+        assert!(link_body("tok", "n1", "pk", None, &d, &none).get("name").is_none());
+    }
+
+    #[test]
+    fn link_body_carries_the_integrity_token_or_why_not() {
+        let d = Device { model: "Pixel 8".into(), android_version: "15".into(), app_version: "0.1.0".into() };
+        let tok = "x".repeat(3000); // tokens are long; never cut
+        let b = link_body("tok", "n1", "pk", None, &d, &Integrity { token: tok.clone(), error: String::new() });
+        assert_eq!(b["integrity_token"], json!(tok));
+        assert!(b.get("integrity_error").is_none());
+        let b = link_body("tok", "n1", "pk", None, &d, &Integrity { token: String::new(), error: "TIMEOUT".into() });
+        assert!(b.get("integrity_token").is_none() && b["integrity_error"] == "TIMEOUT");
+        // neither: still a reason, never silence
+        let b = link_body("tok", "n1", "pk", None, &d, &Integrity::default());
+        assert_eq!(b["integrity_error"], "NO_TOKEN");
     }
 
     #[test]

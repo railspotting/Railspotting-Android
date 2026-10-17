@@ -25,7 +25,8 @@ fn sign_in(fake: &Fake, account: &str, skew: &Arc<SkewClock>) -> ([u8; 32], Resu
     skew.absorb(&api);
     assert_eq!(hello["google_client_id"], "test-client");
     let nonce = hello["nonce"].as_str().unwrap().to_string();
-    let body = link::link_body(&format!("token:{account}:{nonce}"), &nonce, &link::public_key(&seed).unwrap(), None, &device());
+    let body = link::link_body(&format!("token:{account}:{nonce}"), &nonce, &link::public_key(&seed).unwrap(), None, &device(),
+                               &link::Integrity { token: "play-token".into(), error: String::new() });
     (seed, link::link(&api, &body).map_err(|e| e.error))
 }
 
@@ -77,7 +78,7 @@ fn links_and_moves_between_phones() {
     let key = link::key_from_seed(&link::new_seed()).unwrap();
     let api = link::client(&fake.url(), &key, None, skew.clock()).unwrap();
     let nonce = link::hello(&api).unwrap()["nonce"].as_str().unwrap().to_string();
-    let body = link::link_body(&format!("token:ann:{nonce}"), &nonce, &railspotting_proto::keys::public_b64(&key), None, &device());
+    let body = link::link_body(&format!("token:ann:{nonce}"), &nonce, &railspotting_proto::keys::public_b64(&key), None, &device(), &link::Integrity::default());
     assert!(link::link(&api, &body).is_ok());
     let again = link::link(&api, &body).unwrap_err();
     assert_eq!((again.status, again.error.as_str()), (Some(401), "invalid_token"));
@@ -103,7 +104,7 @@ fn a_key_of_another_account_is_refused() {
     let key = link::key_from_seed(&seed).unwrap();
     let api = link::client(&fake.url(), &key, None, skew.clock()).unwrap();
     let nonce = link::hello(&api).unwrap()["nonce"].as_str().unwrap().to_string();
-    let body = link::link_body(&format!("token:bob:{nonce}"), &nonce, &link::public_key(&seed).unwrap(), None, &device());
+    let body = link::link_body(&format!("token:bob:{nonce}"), &nonce, &link::public_key(&seed).unwrap(), None, &device(), &link::Integrity::default());
     let e = link::link(&api, &body).unwrap_err();
     assert_eq!((e.status, e.error.as_str()), (Some(409), "key_in_use"));
 }
@@ -505,4 +506,28 @@ fn reports_a_train_by_hand() {
     let other = link::client(&fake.url(), &key, Some(dev), skew.clock()).unwrap();
     let r = other.request("GET", "/trains/unknown", None, true, &[], "", true);
     assert_eq!(r.unwrap_err().status, Some(404));
+}
+
+#[test]
+fn integrity_goes_with_the_link_and_never_blocks_it() {
+    // proposed contract v1.14: the token rides on /mobile/link only; without one, the reason does,
+    // and the phone links all the same
+    let fake = Fake::start();
+    let (_, r) = sign_in(&fake, "ivy", &SkewClock::new());
+    assert_eq!(r.unwrap().0, 201);
+    let sent = fake.st().links.last().cloned().unwrap();
+    assert_eq!(sent["integrity_token"], "play-token");
+
+    let seed = link::new_seed();
+    let key = link::key_from_seed(&seed).unwrap();
+    let skew = SkewClock::new();
+    let api = link::client(&fake.url(), &key, None, skew.clock()).unwrap();
+    let hello = link::hello(&api).unwrap();
+    assert!(hello.get("integrity_token").is_none());
+    let nonce = hello["nonce"].as_str().unwrap().to_string();
+    let body = link::link_body(&format!("token:jo:{nonce}"), &nonce, &link::public_key(&seed).unwrap(), None, &device(),
+                               &link::Integrity { token: String::new(), error: "API_NOT_AVAILABLE".into() });
+    assert_eq!(link::link(&api, &body).map_err(|e| e.error).unwrap().0, 201, "no token: links anyway");
+    let sent = fake.st().links.last().cloned().unwrap();
+    assert!(sent.get("integrity_token").is_none() && sent["integrity_error"] == "API_NOT_AVAILABLE");
 }
