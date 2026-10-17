@@ -1,0 +1,31 @@
+# Gradle and Android Studio
+.gradle/
+build/
+/local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Rust core
+/core/target/
+
+# Google OAuth client downloads (the app does not use them)
+client_secret_*.json
+
+# Release signing: never commit keys or their passwords
+/keystore.properties
+*.jks
+*.keystore
+
+# editors and OS
+*.swp
+*~
+.DS_Store
+.vscode/
+
+# local environment
+.env
+.env.*

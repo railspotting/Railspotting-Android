@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RailSpotting</string>
+    <string name="channel_listening">Listening</string>
+    <string name="channel_listening_about">Shown while the phone listens to a scanner and sends its position</string>
+    <string name="channel_trains">Trains</string>
+    <string name="channel_trains_about">End-of-train devices heard by this phone, or by other receivers near you</string>
+    <string name="channel_account">Account</string>
+    <string name="channel_account_about">When this phone is signed out by RailSpotting</string>
+</resources>

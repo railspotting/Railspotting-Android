@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- branding/brand-guide.md (receiver submodule): the tile (amber and rail colors are in ui/Theme.kt) -->
+    <color name="rs_tile">#16191C</color>
+</resources>

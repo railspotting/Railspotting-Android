@@ -1,0 +1,43 @@
+[package]
+name = "railspotting-mobile"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+publish = false
+description = "The RailSpotting receiver core for the Android app: the receiver's SDR processing, outbox and signing, plus the mobile contract (v1.7)"
+
+[lib]
+# cdylib for the app (librailspotting_mobile.so), rlib for the tests
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+log = { version = "0.4.34", features = ["std"] }
+railspotting-common = { path = "../receiver/crates/common" }
+railspotting-proto = { path = "../receiver/crates/proto" }
+railspotting-scanner = { path = "../receiver/crates/scanner" }
+railspotting-store = { path = "../receiver/crates/store" }
+railspotting-dsp = { path = "../receiver/crates/dsp" }
+railspotting-engine = { path = "../receiver/crates/engine" }
+serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
+# the public live map feed, for EOT alerts near the phone (the receiver's proto already uses it)
+ureq = { version = "3.4.2", features = ["json"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21.1", default-features = false }
+
+[dev-dependencies]
+railspotting-proto = { path = "../receiver/crates/proto", features = ["fake"] }
+
+# The core is its own workspace; the receiver submodule has another.
+[workspace]
+
+# the radio processing (FFTs, filters) is too slow unoptimized, even in tests (as the receiver)
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 4
+strip = "debuginfo"

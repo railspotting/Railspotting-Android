@@ -1,0 +1,9 @@
+[submodule "receiver"]
+	path = receiver
+	url = ../Railspotting-Receiver.git
+[submodule "native/libusb"]
+	path = native/libusb
+	url = https://github.com/libusb/libusb.git
+[submodule "native/rtl-sdr"]
+	path = native/rtl-sdr
+	url = https://gitea.osmocom.org/sdr/rtl-sdr.git

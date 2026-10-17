@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# The receiver submodule is a private repository. CI reads it with a read-only deploy key on
+# railspotting/Railspotting-Receiver, whose private half is this repository's secret
+# RECEIVER_DEPLOY_KEY. The other submodules are public.
+
+jobs:
+  core:
+    name: core tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: submodules (the receiver over its deploy key)
+        env:
+          KEY: ${{ secrets.RECEIVER_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/receiver
+          chmod 600 ~/.ssh/receiver
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+          git config --global url."git@github.com:railspotting/Railspotting-Receiver".insteadOf \
+            "https://github.com/railspotting/Railspotting-Receiver"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/receiver -o IdentitiesOnly=yes" git submodule update --init --recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: cargo test
+        working-directory: core
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: core
+
+  app:
+    name: app build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: submodules (the receiver over its deploy key)
+        env:
+          KEY: ${{ secrets.RECEIVER_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/receiver
+          chmod 600 ~/.ssh/receiver
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+          git config --global url."git@github.com:railspotting/Railspotting-Receiver".insteadOf \
+            "https://github.com/railspotting/Railspotting-Receiver"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/receiver -o IdentitiesOnly=yes" git submodule update --init --recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: cargo install cargo-ndk --locked
+      # the runner's SDK, plus this app's platform and NDK
+      - run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "ndk;29.0.14206865" > /dev/null
+      - run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+      - run: ./gradlew testDebugUnitTest lintDebug assembleDebug
