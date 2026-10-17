@@ -126,21 +126,44 @@ object Updater {
             // once the app installed itself, later updates need no confirmation (Android 12+)
             if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
+        // a session left over from an earlier try (its answer may never have come) would only
+        // pile up: start clean
+        installer.mySessions.forEach { s ->
+            try {
+                installer.abandonSession(s.sessionId)
+            } catch (_: SecurityException) {
+                // not ours, or already gone
+            }
+        }
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
             session.openWrite("base.apk", 0, apk.length()).use { out ->
                 apk.inputStream().use { it.copyTo(out) }
                 session.fsync(out)
             }
-            val result = Intent(ACTION_RESULT).setPackage(context.packageName)
+            // naming the receiver: it has no intent filter, so an action alone never reaches it
+            // and the install sat at "Installing" (0.2.0 to 0.3.1)
+            val result = Intent(context, InstallResult::class.java).setAction(ACTION_RESULT)
             val pi = PendingIntent.getBroadcast(context, id, result,
                 PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             session.commit(pi.intentSender)
         }
     }
 
-    /** Android wants the owner to confirm: a notification that opens its prompt. */
+    /**
+     * Android wants the owner to confirm. With the app on screen (Check now) its prompt opens at
+     * once; otherwise a notification opens it, which needs the notification permission a fresh
+     * install may not have yet.
+     */
     fun askToConfirm(context: Context, confirm: Intent) {
+        if (RailSpottingApp.of(context).foreground) {
+            try {
+                context.startActivity(Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "could not open the install prompt: $e")
+            }
+        }
         val pi = PendingIntent.getActivity(context, NOTE_ID, confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(context, RailSpottingApp.CHANNEL_ACCOUNT)

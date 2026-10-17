@@ -19,7 +19,7 @@ class InstallResult : BroadcastReceiver() {
                 // the first self-update: Android asks the owner
                 IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
                     ?.let { Updater.askToConfirm(context, it) }
-                app.prefs.updateStatus = "Tap the notification to install the update"
+                app.prefs.updateStatus = "Confirm the install in Android's prompt (or its notification)"
             }
             PackageInstaller.STATUS_SUCCESS -> app.prefs.updateStatus = "Updated"
             else -> {
