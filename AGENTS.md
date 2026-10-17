@@ -45,6 +45,9 @@ cd core && cargo clippy --all-targets
   - No em dashes.
   - Log lines are read by owners, so keep them plain.
 - **Tests:** add or update a test for every behaviour change, in `core/tests` or `app/src/test`.
+- **Releases:** `tools/release.sh patch "notes"`. Fixes and small features are patch releases
+  (0.3.0 to 0.3.1); a minor or major step only when the owner asks for one. A release reaches
+  every phone within a day and can't be taken back: publish only what has been tested.
 
 ## Repository hygiene
 
