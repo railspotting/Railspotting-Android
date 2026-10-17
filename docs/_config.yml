@@ -1,0 +1,27 @@
+title: "RailSpotting for Android"
+short: "Android app"
+description: "Turns a phone with an RTL-SDR dongle into a mobile RailSpotting receiver."
+baseurl: "/Railspotting-Android"
+url: "https://railspotting.github.io"
+repo: "https://github.com/railspotting/Railspotting-Android"
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+defaults:
+  - scope: {path: ""}
+    values: {layout: default}
+exclude: ["contract-*.md", "README.md"]
+links:
+  - {title: "Receiver", url: "https://railspotting.github.io/Railspotting-Receiver/"}
+  - {title: "GitHub", url: "https://github.com/railspotting/Railspotting-Android"}
+  - {title: "railspotting.com", url: "https://railspotting.com"}
+nav:
+  - title: "Start"
+    pages:
+      - {title: "Overview", url: "/"}
+  - title: "Using the app"
+    pages:
+      - {title: "Installing the app", url: "/install/"}
+      - {title: "USB and SDR adapters", url: "/usb-and-sdr/"}
+      - {title: "How location is used", url: "/location/"}
