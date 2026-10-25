@@ -27,6 +27,47 @@ data class Heard(
 /** A channel the dongle watches. */
 data class Watched(val freq: Double, val label: String, val kind: String, val receiving: Boolean)
 
+/** A wayside unit (signal or crossing) as the ITC dongle last heard it. */
+data class ItcUnit(
+    val wiu: String,
+    val codes: List<Int>,
+    /** Each code's aspect name where public material gives one ("Clear"), else null. */
+    val aspects: List<String?>,
+    val previous: List<Int>?,
+    val changedS: Double,
+    val heardS: Double,
+    val channel: Int,
+) {
+    /** "123456 0ff0": the area's group, then the unit. */
+    val name: String get() = if (wiu.length == 10) wiu.substring(0, 6) + " " + wiu.substring(6) else wiu
+    val state: String get() = Itc.state(codes, aspects)
+}
+
+/** One wayside unit's change of state. */
+data class ItcChange(val wiu: String, val codes: List<Int>, val aspects: List<String?>, val previous: List<Int>, val agoS: Double) {
+    val name: String get() = if (wiu.length == 10) wiu.substring(0, 6) + " " + wiu.substring(6) else wiu
+}
+
+/** A base station whose beacon the ITC dongle hears. */
+data class ItcBase(val radio: String, val localChannel: Int, val levelDb: Double, val heardS: Double)
+
+/** The ITC dongle: what it watches and what it hears. Kept on the phone; never sent. */
+data class ItcStatus(
+    val channels: List<Int> = listOf(),
+    val messages: Long = 0,
+    val lastMessageS: Double? = null,
+    val bases: List<ItcBase> = listOf(),
+    val units: List<ItcUnit> = listOf(),
+    val changes: List<ItcChange> = listOf(),
+    val error: String = "",
+)
+
+object Itc {
+    /** "Approach, code 15": the aspect where it is known, the device code otherwise. */
+    fun state(codes: List<Int>, aspects: List<String?>): String =
+        codes.mapIndexed { i, c -> aspects.getOrNull(i) ?: "code $c" }.joinToString(", ").ifEmpty { "no devices" }
+}
+
 /** The voice call live listen is playing. */
 data class Playing(val eventId: String, val freq: Double, val label: String, val since: Double)
 
@@ -40,6 +81,8 @@ data class RadioStatus(
     val live: Boolean = false,
     val playing: Playing? = null,
     val channels: List<Watched> = listOf(),
+    /** In ITC mode. */
+    val itc: ItcStatus? = null,
 )
 
 /** The channel plan in use: the headend's name for it when it sends one (plans by location). */
@@ -140,8 +183,36 @@ data class Status(
                             it.optBoolean("receiving"))
                     }
                 },
+                itc = r.optJSONObject("itc")?.let { itc(it) },
             )
         }
+
+        private fun ints(a: org.json.JSONArray?): List<Int> = (0 until (a?.length() ?: 0)).map { a!!.optInt(it) }
+
+        private fun names(a: org.json.JSONArray?): List<String?> =
+            (0 until (a?.length() ?: 0)).map { if (a!!.isNull(it)) null else a.optString(it) }
+
+        private fun objects(a: org.json.JSONArray?): List<JSONObject> =
+            (0 until (a?.length() ?: 0)).mapNotNull { a?.optJSONObject(it) }
+
+        private fun itc(o: JSONObject) = ItcStatus(
+            channels = ints(o.optJSONArray("channels")),
+            messages = o.optLong("messages"),
+            lastMessageS = o.optNumber("last_message_s"),
+            bases = objects(o.optJSONArray("bases")).map {
+                ItcBase(it.optStringOrEmpty("radio"), it.optInt("local_channel"), it.optDouble("level_db", 0.0), it.optDouble("heard_s", 0.0))
+            },
+            units = objects(o.optJSONArray("units")).map {
+                ItcUnit(it.optStringOrEmpty("wiu"), ints(it.optJSONArray("codes")), names(it.optJSONArray("aspects")),
+                    it.optJSONArray("previous_codes")?.let { p -> ints(p) }, it.optDouble("changed_s", 0.0),
+                    it.optDouble("heard_s", 0.0), it.optInt("channel"))
+            },
+            changes = objects(o.optJSONArray("changes")).map {
+                ItcChange(it.optStringOrEmpty("wiu"), ints(it.optJSONArray("codes")), names(it.optJSONArray("aspects")),
+                    ints(it.optJSONArray("previous_codes")), it.optDouble("ago_s", 0.0))
+            },
+            error = o.optStringOrEmpty("error"),
+        )
 
         /** A JSON null reads as "" here, not as the text "null". */
         private fun JSONObject.optStringOrEmpty(k: String) = if (isNull(k)) "" else optString(k)

@@ -1005,6 +1005,7 @@ dependencies = [
  "log",
  "num-complex",
  "railspotting-common",
+ "railspotting-itc",
  "rustfft",
  "serde",
  "serde_json",
@@ -1025,6 +1026,7 @@ dependencies = [
  "railspotting-common",
  "railspotting-detect",
  "railspotting-dsp",
+ "railspotting-itc",
  "railspotting-proto",
  "railspotting-scanner",
  "railspotting-store",
@@ -1039,6 +1041,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "railspotting-itc"
+version = "2.0.0"
+dependencies = [
+ "log",
+ "num-complex",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "railspotting-mobile"
 version = "0.1.0"
 dependencies = [
@@ -1047,6 +1060,7 @@ dependencies = [
  "railspotting-common",
  "railspotting-dsp",
  "railspotting-engine",
+ "railspotting-itc",
  "railspotting-proto",
  "railspotting-scanner",
  "railspotting-store",

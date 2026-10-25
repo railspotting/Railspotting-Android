@@ -14,6 +14,8 @@ dongle into the phone, sign in with Google, and the phone listens for trains whi
   marker light and battery.
 - **Road channels**, the railroad voice channels near you, with **live listen** to hear calls as
   they happen.
+- **ITC**, the 220 MHz radio of positive train control: the signals near you and when they change,
+  shown on the phone only.
 
 What the phone hears goes to [RailSpotting](https://railspotting.com), together with where the phone
 is, so trains show up on the live map. The app also shows the live map, alerts you to trains heard

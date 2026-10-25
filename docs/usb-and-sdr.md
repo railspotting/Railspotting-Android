@@ -12,7 +12,7 @@ drivers to install**. The app includes the RTL-SDR driver (librtlsdr) and libusb
 |---|---|
 | **RTL-SDR dongle** | any dongle with the **RTL2832U** chip and an **R820T/R820T2** (or R860) tuner. The app knows the USB IDs of every dongle librtlsdr supports. |
 | **USB OTG adapter or cable** | to plug a USB-A dongle into the phone's USB-C port. A short cable is better than a rigid adapter: it keeps the dongle's weight off the phone's port. |
-| **Antenna** | for EOT, one cut for UHF (about 460 MHz; a quarter-wave whip is about 16 cm). For road channels, one for VHF (about 160 MHz; a quarter-wave is about 46 cm). The small antenna that comes with most dongles works, but poorly. See the receiver wiki's antenna page. |
+| **Antenna** | for EOT, one cut for UHF (about 460 MHz; a quarter-wave whip is about 16 cm). For road channels, one for VHF (about 160 MHz; a quarter-wave is about 46 cm). For ITC, one for 220 MHz (a quarter-wave is about 34 cm). The small antenna that comes with most dongles works, but poorly. See the receiver wiki's antenna page. |
 
 ### Tested
 

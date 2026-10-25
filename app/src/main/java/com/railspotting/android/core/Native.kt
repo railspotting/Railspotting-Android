@@ -79,7 +79,7 @@ object Native {
     /** Call before closing the dongle's connection. */
     @JvmStatic external fun dongleDetached()
 
-    /** "voice" (road channels, live listen) or "eot" (end-of-train, decoded). */
+    /** "voice" (road channels, live listen), "eot" (end-of-train, decoded) or "itc" (220 MHz PTC). */
     @JvmStatic external fun setMode(mode: String)
 
     /** The dongle's tuner gain: "auto" or dB ("40.2"). The dongle reopens with it. */

@@ -479,3 +479,91 @@ pub fn wait_for(secs: f64, mut f: impl FnMut() -> bool) -> bool {
     }
     f()
 }
+
+// a fake ITC dongle ------------------------------------------------------------------------------
+
+/// The made-up wayside unit the fake ITC dongle hears.
+pub const ITC_UNIT: &str = "1234560ff0";
+
+/// A dongle at 220 MHz that hears one wayside unit on the national ITC channel (102) every 2 s:
+/// indicators b600 for the first three times, then 4600 (a change). The frames are real ones,
+/// from the receiver's own encoder, sent as pi/4-DQPSK at 16 ksym/s.
+pub struct ItcDongle;
+
+struct ItcDev {
+    tuned: Mutex<(f64, f64)>,
+    stop: AtomicBool,
+}
+
+impl Device for ItcDev {
+    fn info(&self) -> serde_json::Map<String, Value> {
+        json!({"vendor": "Fake", "product": "ITC test dongle", "tuner": "R820T"}).as_object().cloned().unwrap_or_default()
+    }
+    fn configure(&self, rate: f64, center_hz: f64, _gain: &Value) -> Result<(), String> {
+        *self.tuned.lock().unwrap() = (rate, center_hz);
+        Ok(())
+    }
+    fn set_center(&self, center_hz: f64) {
+        self.tuned.lock().unwrap().1 = center_hz;
+    }
+    fn read_samples_async(&self, callback: &mut dyn FnMut(Vec<railspotting_dsp::Complex32>), num_samples: usize) -> Result<(), String> {
+        use railspotting_dsp::Complex32;
+        use std::f32::consts::PI;
+        let (rate, center) = *self.tuned.lock().unwrap();
+        let sps = (rate / 16_000.0) as usize;
+        let shift = 2.0 * std::f64::consts::PI * (railspotting_itc::dsp::channel_hz(102) - center) / rate;
+        // each frame as baseband symbols, sample by sample
+        let frame = |ind: [u8; 2]| -> Vec<Complex32> {
+            let msg = [0x12, 0x34, 0x56, 0x0f, 0xf0, 0x82, 0x07, 0x50, ind[0], ind[1], 1, 2, 3, 4];
+            let mut bits = vec![1u8; 14];
+            bits.extend(railspotting_itc::link::encode_frame(0x34, &msg));
+            let (mut out, mut phase) = (vec![], 0.0f32);
+            for d in bits.chunks(2) {
+                phase += match (d[0], d[1]) {
+                    (0, 0) => PI / 4.0,
+                    (0, 1) => 3.0 * PI / 4.0,
+                    (1, 1) => -3.0 * PI / 4.0,
+                    _ => -PI / 4.0,
+                };
+                out.extend(std::iter::repeat_n(Complex32::from_polar(0.4, phase), sps));
+            }
+            out
+        };
+        let frames = [frame([0xb6, 0x00]), frame([0x46, 0x00])];
+        let cycle = (2.0 * rate) as u64;
+        let start_at = (0.5 * rate) as u64;
+        let (mut n, mut seed) = (0u64, 12345u32);
+        let mut noise = move || {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+            ((seed >> 16) as f32 / 32768.0 - 1.0) * 0.02
+        };
+        while !self.stop.load(Ordering::SeqCst) {
+            let mut block = Vec::with_capacity(num_samples);
+            for _ in 0..num_samples {
+                let (c, at) = (n / cycle, n % cycle);
+                let f = &frames[if c < 3 { 0 } else { 1 }];
+                let mut v = Complex32::new(noise(), noise());
+                if at >= start_at && ((at - start_at) as usize) < f.len() {
+                    let w = (shift * n as f64).rem_euclid(2.0 * std::f64::consts::PI) as f32;
+                    v += f[(at - start_at) as usize] * Complex32::from_polar(1.0, w);
+                }
+                block.push(v);
+                n += 1;
+            }
+            callback(block);
+            // about real time, so the receiver's clock and the samples agree
+            std::thread::sleep(Duration::from_secs_f64(num_samples as f64 / rate));
+        }
+        Ok(())
+    }
+    fn cancel_read_async(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+    }
+    fn close(&self) {}
+}
+
+impl ItcDongle {
+    pub fn opener() -> radio::Opener {
+        Arc::new(|_fd| Ok(Arc::new(ItcDev { tuned: Mutex::new((1_024_000.0, 220.3e6)), stop: AtomicBool::new(false) }) as Arc<dyn Device>))
+    }
+}

@@ -175,7 +175,7 @@ class ListenService : Service() {
         if (st.listening) gps.start() else gps.stop()
         alerts(st)
         val text = when {
-            st.listening -> (if (st.radio.mode == "voice") "Listening to road channels" else "Listening for EOT") +
+            st.listening -> modeListening(st.radio.mode) +
                 (if (st.online) "" else " (offline, events kept)")
             st.radio.attached && reconnect.tries > 0 -> "No data from the dongle; reconnecting"
             st.radio.attached -> "Dongle connected, starting"
@@ -302,4 +302,11 @@ class ListenService : Service() {
             context.stopService(Intent(context, ListenService::class.java))
         }
     }
+}
+
+/** The notification's line for a mode while listening. */
+internal fun modeListening(mode: String) = when (mode) {
+    "voice" -> "Listening to road channels"
+    "itc" -> "Listening to ITC (220 MHz)"
+    else -> "Listening for EOT"
 }
