@@ -5,11 +5,14 @@ with Google, plugs an RTL-SDR dongle in with a USB OTG adapter, and starts liste
 reports what the dongle hears, and where the phone is, to the RailSpotting headend under API contract
 v1.7.
 
-The one dongle works in one of two modes, which the owner switches on the Activity tab:
+The one dongle works in one of three modes, which the owner switches on the Activity tab:
 - **End-of-train (EOT)**: decodes EOT devices on the phone (unit, brake pipe pressure, motion).
   This is the default, as EOT is the fixed receivers' priority.
 - **Road channels**: watches the voice channels near the phone, with **live listen**, which plays
   the call on the air.
+- **ITC**: listens to the 220 MHz radio of positive train control and shows the signals it hears
+  (each wayside unit's state and its latest changes) and the base stations. It needs a 220 MHz
+  antenna. What it hears stays on the phone: it is not sent to the headend.
 
 **Using it:** the app reports to RailSpotting ([railspotting.com](https://railspotting.com)), a
 service that is not open source. You need a RailSpotting account (sign in with Google) for the
@@ -270,9 +273,16 @@ account. A new mobile receiver is provisional and private, so testing doesn't to
   - `429` and `Retry-After` are honoured.
 - **Sharing** is a switch, on by default, sent in every heartbeat. With it off, nothing the phone
   hears reaches the public map.
-- **The dongle** runs the receiver's own SDR code in one of two roles:
+- **The dongle** runs the receiver's own SDR code in one of three roles:
   - **End-of-train** (`eot`): the plan's EOT channel, with packets decoded on the phone.
   - **Road channels** (`vhf`): the plan's voice channels that fit the dongle's 2.4 MHz.
+  - **ITC** (`itc`): 220.3 MHz at 1.024 MS/s. It starts on the national channel (102), where base
+    stations send beacons, and adds the local channel of each base it hears. The receiver's ITC
+    decoder runs on the phone. Signal states, changes and base stations show on the Activity tab;
+    two days of messages are kept in the app's storage (`itc/`). Nothing ITC goes to the headend:
+    the mobile contract (v1.7) has no place for it, and the heartbeat lists the dongle with no
+    role, as a spare. The receiver's local ITC feed is off on the phone, since any app could reach
+    a port on 127.0.0.1.
 
   The Activity tab switches modes, and the dongle reopens in the new role at once. There is no
   speech transcription on the phone. Burst recordings are off, to save storage.

@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.railspotting.android.RailSpottingApp
 import com.railspotting.android.core.Heard
+import com.railspotting.android.core.Itc
+import com.railspotting.android.core.ItcStatus
 import com.railspotting.android.core.Native
 import com.railspotting.android.core.PlanInfo
 import com.railspotting.android.core.Status
@@ -59,8 +61,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * What this phone hears: the dongle's mode (road channels or EOT), live listen, calls on the air
- * at the top, and everything heard since listening started, with EOT packets decoded.
+ * What this phone hears: the dongle's mode (road channels, EOT or ITC), live listen, calls on the
+ * air at the top, and everything heard since listening started, with EOT packets decoded. In ITC
+ * mode: the signals heard, their latest changes and the base stations, kept on the phone.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,14 +97,18 @@ fun ActivityScreen(app: RailSpottingApp, st: Status, listening: Boolean) {
         }
         Section("Radio") {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(selected = mode == "voice", onClick = { choose("voice") },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Road channels") }
-                SegmentedButton(selected = mode == "eot", onClick = { choose("eot") },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("End-of-train") }
+                MODE_NAMES.forEachIndexed { i, (m, name) ->
+                    SegmentedButton(selected = mode == m, onClick = { choose(m) },
+                        shape = SegmentedButtonDefaults.itemShape(i, MODE_NAMES.size)) { Text(name) }
+                }
             }
             Text(
-                if (mode == "voice") "The dongle watches the road channels near you. Turn on live listen to hear calls."
-                else "The dongle listens for end-of-train devices and decodes them: unit, brake pipe pressure, motion.",
+                when (mode) {
+                    "voice" -> "The dongle watches the road channels near you. Turn on live listen to hear calls."
+                    "itc" -> "The dongle listens to ITC, the 220 MHz radio of positive train control, and shows the " +
+                        "signals it hears. It needs a 220 MHz antenna. What it hears stays on this phone."
+                    else -> "The dongle listens for end-of-train devices and decodes them: unit, brake pipe pressure, motion."
+                },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
@@ -117,8 +124,16 @@ fun ActivityScreen(app: RailSpottingApp, st: Status, listening: Boolean) {
                 Text(st.radio.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             GainChoice(app)
-            HorizontalDivider()
-            ChannelList(st, listening)
+            // ITC finds its own channels from base station beacons; the headend's list is for voice and EOT
+            if (mode != "itc") {
+                HorizontalDivider()
+                ChannelList(st, listening)
+            }
+        }
+
+        if (mode == "itc") {
+            ItcSections(st.radio.itc, listening)
+            return@Page
         }
 
         if (mode == "voice") {
@@ -296,5 +311,81 @@ private fun GainChoice(app: RailSpottingApp) {
                 }
             }
         }
+    }
+}
+
+/** The mode choices, in order: the value the core takes, and the button's name. */
+internal val MODE_NAMES = listOf("voice" to "Road", "eot" to "EOT", "itc" to "ITC")
+
+/** "12 s ago", or "just now". */
+private fun ago(s: Double) = if (s < 2) "just now" else Status.age(s)
+
+/** ITC mode: the signals heard (latest change first), the latest changes, and the radio side. */
+@Composable
+private fun ItcSections(itc: ItcStatus?, listening: Boolean) {
+    Section("Signals") {
+        val units = itc?.units.orEmpty()
+        if (units.isEmpty()) {
+            Text(
+                when {
+                    !listening -> "Nothing yet."
+                    itc == null || itc.messages == 0L -> "Nothing heard yet. Base stations send a beacon about every 10 s; " +
+                        "signals show here as their wayside units report."
+                    else -> "Base stations heard; no signals yet. Wayside units report every few seconds when one is in range."
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        units.forEachIndexed { i, u ->
+            if (i > 0) HorizontalDivider()
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Dot(u.changedS < 60)
+                    Spacer(Modifier.width(8.dp))
+                    Text(u.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text("ch ${u.channel}", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(u.state, fontWeight = FontWeight.Medium)
+                Text(
+                    (if (u.previous == null) "Since first heard " else "Changed ") + ago(u.changedS) +
+                        "; heard " + ago(u.heardS),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    val changes = itc?.changes.orEmpty()
+    if (changes.isNotEmpty()) {
+        Section("Latest changes") {
+            changes.take(20).forEach { c ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(c.name, fontWeight = FontWeight.Medium, modifier = Modifier.width(110.dp))
+                    Text(Itc.state(c.codes, c.aspects), Modifier.weight(1f))
+                    Text(ago(c.agoS), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+    Section("ITC radio") {
+        if (itc == null) {
+            Text(if (listening) "Starting." else "Start listening on the Receiver tab to use the dongle.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@Section
+        }
+        if (itc.error.isNotEmpty()) Text(itc.error, color = MaterialTheme.colorScheme.error)
+        Fact("Channels", itc.channels.joinToString(", ").ifEmpty { "-" })
+        Fact("Messages", itc.messages.toString() + (itc.lastMessageS?.let { ", last " + ago(it) } ?: ""))
+        if (itc.bases.isEmpty()) {
+            Text("No base station heard yet. Channel 102 carries their beacons.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        itc.bases.forEach { b ->
+            Fact("Base ${b.radio}", "channel ${b.localChannel}, ${"%.0f".format(b.levelDb)} dB, heard ${ago(b.heardS)}")
+        }
+        Text("ITC describes railroad operations, so it is not sent to RailSpotting. The phone keeps two days of " +
+            "messages in its own storage.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

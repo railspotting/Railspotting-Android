@@ -28,6 +28,8 @@ jni = { version = "0.21.1", default-features = false }
 
 [dev-dependencies]
 railspotting-proto = { path = "../receiver/crates/proto", features = ["fake"] }
+# to make real ITC frames for the fake ITC dongle
+railspotting-itc = { path = "../receiver/crates/itc" }
 
 # The core is its own workspace; the receiver submodule has another.
 [workspace]

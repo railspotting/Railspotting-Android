@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{wait_for, Dongle, Fake, EOT, ROAD};
+use common::{wait_for, Dongle, Fake, ItcDongle, EOT, ITC_UNIT, ROAD};
 use railspotting_mobile::agent::{Agent, Options, Phone};
 use railspotting_mobile::link::{self, Device, SkewClock};
 use railspotting_mobile::location::Fix;
@@ -34,6 +34,11 @@ fn sign_in(fake: &Fake, account: &str, skew: &Arc<SkewClock>) -> ([u8; 32], Resu
 const FD: i64 = 7;
 
 fn start(fake: &Fake, seed: &[u8], device_id: &str, dongle: &Dongle, mode: Mode) -> (Arc<Agent>, tempdir::Dir) {
+    start_with(fake, seed, device_id, dongle.opener(), mode)
+}
+
+fn start_with(fake: &Fake, seed: &[u8], device_id: &str, radio: railspotting_mobile::radio::Opener, mode: Mode)
+              -> (Arc<Agent>, tempdir::Dir) {
     let dir = tempdir::Dir::new();
     let agent = Agent::new(Options {
         server_url: fake.url(),
@@ -42,7 +47,7 @@ fn start(fake: &Fake, seed: &[u8], device_id: &str, dongle: &Dongle, mode: Mode)
         device_id: device_id.into(),
         app_version: "0.1.0".into(),
         share: true,
-        radio: dongle.opener(),
+        radio,
         mode,
         gain: Some(40.2),
         skew: None,
@@ -319,6 +324,42 @@ fn switching_modes_reopens_the_dongle() {
         .is_some_and(|h| h["capabilities"]["receivers"][1]["role"] == "eot")));
     let chans = a.status()["radio"]["channels"].clone();
     assert!(chans.as_array().unwrap().iter().any(|c| c["freq"] == json!(EOT)), "{chans}");
+    a.stop();
+}
+
+#[test]
+fn itc_mode_shows_signals_and_sends_nothing_itc() {
+    let fake = Fake::start();
+    let (seed, r) = sign_in(&fake, "ivy", &SkewClock::new());
+    let dev = r.unwrap().1["device_id"].as_str().unwrap().to_string();
+    let (a, dir) = start_with(&fake, &seed, &dev, ItcDongle::opener(), Mode::Itc);
+    a.radio_attached(FD);
+    assert!(wait_for(10.0, || a.listening()));
+    // the unit is heard on the national channel, decoded on the phone
+    assert!(wait_for(15.0, || a.status()["radio"]["itc"]["units"][0]["wiu"] == ITC_UNIT), "{}", a.status()["radio"]);
+    let st = a.status()["radio"].clone();
+    assert_eq!(st["mode"], "itc");
+    assert_eq!(st["itc"]["channels"], json!([102]));
+    assert!(st["itc"]["by_type"]["WIU_REPLY"].as_u64().unwrap_or(0) >= 1);
+    let first = st["itc"]["units"][0]["codes"].clone();
+    // then it changes: one change, with what it was before
+    assert!(wait_for(20.0, || a.status()["radio"]["itc"]["changes"].as_array().is_some_and(|c| !c.is_empty())), "{}",
+            a.status()["radio"]["itc"]);
+    let ch = a.status()["radio"]["itc"]["changes"][0].clone();
+    assert_eq!(ch["previous_codes"], first);
+    assert_ne!(ch["codes"], first);
+    // the dongle goes up with no role (the mobile contract knows only voice and EOT), and no ITC
+    // message, change or event reaches the headend
+    assert!(wait_for(10.0, || fake.st().heartbeats.last()
+        .is_some_and(|h| h["capabilities"]["receivers"][1]["type"] == "sdr" && h["capabilities"]["receivers"][1]["role"].is_null())));
+    {
+        let st = fake.st();
+        let sent = serde_json::to_string(&st.heartbeats).unwrap() + &serde_json::to_string(&st.events).unwrap();
+        assert!(!sent.contains(ITC_UNIT) && !sent.contains("WIU"), "nothing ITC is sent");
+        assert!(st.events.is_empty());
+    }
+    // the messages are logged on the phone only, for a couple of days
+    assert!(std::fs::read_dir(dir.path.join("itc")).unwrap().count() >= 1);
     a.stop();
 }
 

@@ -20,9 +20,12 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(SHARE, true)
         set(v) = sp.edit { putBoolean(SHARE, v) }
 
-    /** The dongle's mode: "eot" (end-of-train, the default, as on fixed receivers) or "voice". */
+    /**
+     * The dongle's mode: "eot" (end-of-train, the default, as on fixed receivers), "voice" (road
+     * channels) or "itc" (220 MHz PTC, kept on the phone).
+     */
     var mode: String
-        get() = sp.getString(MODE, "eot").takeIf { it == "voice" || it == "eot" } ?: "eot"
+        get() = sp.getString(MODE, "eot").takeIf { it in MODES } ?: "eot"
         set(v) = sp.edit { putString(MODE, v) }
 
     /** The dongle's tuner gain: "auto" or dB as text, one of [GAINS]. */
@@ -96,6 +99,7 @@ class Prefs(context: Context) {
         private const val SHARE = "share"
         private const val SIGNED_OUT = "signed_out"
         private const val MODE = "mode"
+        val MODES = listOf("voice", "eot", "itc")
         private const val GAIN = "gain"
         private const val STAY_AWAKE = "stay_awake"
         private const val AUTO_UPDATE = "auto_update"

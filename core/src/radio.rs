@@ -1,7 +1,10 @@
-//! The phone's RTL-SDR dongle: one at most, in one of two modes the owner picks.
+//! The phone's RTL-SDR dongle: one at most, in one of three modes the owner picks.
 //!
 //! - **Voice**: the VHF road channels (the fixed receiver's `vhf` role), with live listen.
 //! - **EOT**: the end-of-train channel, with packets decoded on the phone (the `eot` role).
+//! - **ITC**: the 220 MHz PTC radio (the `itc` role): base stations and wayside signal states,
+//!   decoded on the phone and shown only to the owner. Nothing ITC goes to the headend: the
+//!   mobile contract (v1.7) has no place for it, and it describes railroad operations.
 //!
 //! The processing is the fixed receiver's own (`SdrHandle` and `SdrSource` from the receiver
 //! crates): the same windows, detectors, events and EOT decoder. Android gives the app a USB file
@@ -30,6 +33,7 @@ pub fn rtl_opener() -> Opener {
 pub enum Mode {
     Voice,
     Eot,
+    Itc,
 }
 
 impl Mode {
@@ -37,6 +41,7 @@ impl Mode {
         match s {
             "voice" => Some(Mode::Voice),
             "eot" => Some(Mode::Eot),
+            "itc" => Some(Mode::Itc),
             _ => None,
         }
     }
@@ -45,6 +50,7 @@ impl Mode {
         match self {
             Mode::Voice => "voice",
             Mode::Eot => "eot",
+            Mode::Itc => "itc",
         }
     }
 
@@ -53,6 +59,7 @@ impl Mode {
         match self {
             Mode::Voice => "vhf",
             Mode::Eot => "eot",
+            Mode::Itc => "itc",
         }
     }
 }
@@ -336,6 +343,11 @@ pub const PHONE_GAIN_DB: f64 = 40.2;
 
 /// EOT burst recordings kept in the phone's storage (`bursts/`), newest first.
 pub const EOT_BURSTS_KEPT: usize = 25;
+/// Days of ITC message logs kept on the phone (`itc/`, a few MB a day where it is busy).
+pub const ITC_KEEP_DAYS: u64 = 2;
+/// The ITC rate: 1.024 MS/s covers the national channel and nearby base channels, and is the
+/// lightest rate the decoder takes (the fixed receiver's ITC default too).
+pub const ITC_RATE: f64 = 1_024_000.0;
 
 pub struct Radio {
     opener: Opener,
@@ -430,10 +442,17 @@ impl Radio {
     fn rebuild(&self, st: &mut State, cfg: &Value) {
         Self::drop_handle(st);
         let Some(fd) = st.fd else { return };
-        let dev_cfg = json!({"role": st.mode.role(), "serial": "usb", "name": match st.mode {
+        let mut dev_cfg = json!({"role": st.mode.role(), "serial": "usb", "name": match st.mode {
             Mode::Voice => "Voice SDR",
             Mode::Eot => "EOT SDR",
+            Mode::Itc => "ITC SDR",
         }, "gain": st.gain.map_or(json!("auto"), |g| json!(g))});
+        if st.mode == Mode::Itc {
+            // no local feed: any app on the phone could connect to a port on 127.0.0.1
+            dev_cfg["sample_rate"] = json!(ITC_RATE);
+            dev_cfg["serve"] = json!("");
+            dev_cfg["keep_days"] = json!(ITC_KEEP_DAYS);
+        }
         // EOT bursts are kept on the phone (the last 25, about 9 MB) so a missed decode can be
         // replayed; voice bursts are not (storage)
         let sdr_settings = json!({"margin_db": 6.0, "min_windows": 2, "record_bursts": st.mode == Mode::Eot,
@@ -462,9 +481,17 @@ impl Radio {
         self.handle().is_some_and(|h| h.covers(kind, word))
     }
 
-    /// The heartbeat's receivers entry, when a dongle is attached.
+    /// The heartbeat's receivers entry, when a dongle is attached. An ITC dongle goes up with no
+    /// role, as a spare does: the mobile contract (v1.7) knows only the voice and EOT roles.
     pub fn capability(&self) -> Option<Map<String, Value>> {
-        self.handle().map(|h| h.with(|s| s.capability()))
+        let mut c = self.handle().map(|h| h.with(|s| s.capability()))?;
+        if self.mode() == Mode::Itc {
+            c.insert("role".into(), Value::Null);
+            c.insert("channels".into(), json!([]));
+            c.insert("uncovered_channels".into(), json!([]));
+            c.insert("reference_in_window".into(), json!(false));
+        }
+        Some(c)
     }
 
     pub fn status(&self) -> Value {
@@ -484,10 +511,34 @@ impl Radio {
                 v["tuner"] = s.info.get("tuner").cloned().unwrap_or(Value::Null);
                 v["error"] = json!(s.last_error);
                 v["last_eot"] = s.last_eot.clone().unwrap_or(Value::Null);
+                if let Some(itc) = &s.itc {
+                    v["itc"] = itc_status(itc, (self.clock)());
+                }
             });
         }
         v
     }
+}
+
+/// What the app shows in ITC mode: the channels watched, base stations, message counts and each
+/// wayside unit's state as last heard, with the latest changes.
+fn itc_status(itc: &railspotting_dsp::itc_rx::ItcRx, now: f64) -> Value {
+    let st = itc.status();
+    let units = itc.units(now);
+    let bases: Vec<Value> = itc.bases.iter().map(|(radio, b)| json!({
+        "radio": radio, "local_channel": b.local_channel, "level_db": (b.level_db * 10.0).round() / 10.0,
+        "heard_s": (now - b.last).max(0.0).round(),
+    })).collect();
+    json!({
+        "channels": st.get("channels").cloned().unwrap_or(json!([])),
+        "messages": itc.messages,
+        "by_type": st.get("by_type").cloned().unwrap_or(json!({})),
+        "last_message_s": (itc.last_t > 0.0).then(|| (now - itc.last_t).max(0.0).round()),
+        "bases": bases,
+        "units": units["units"],
+        "changes": units["changes"],
+        "error": itc.last_error,
+    })
 }
 
 /// "auto", or the gain in dB as text ("40.2").
@@ -528,6 +579,8 @@ mod tests {
         assert_eq!(Mode::parse("voice"), Some(Mode::Voice));
         assert_eq!(Mode::parse("eot").map(Mode::role), Some("eot"));
         assert_eq!(Mode::Voice.role(), "vhf");
+        assert_eq!(Mode::parse("itc").map(Mode::role), Some("itc"));
+        assert_eq!(Mode::Itc.name(), "itc");
         assert_eq!(Mode::parse("hot"), None);
     }
 

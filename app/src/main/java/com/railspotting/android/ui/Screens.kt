@@ -337,7 +337,7 @@ fun StatusScreen(activity: Activity, app: RailSpottingApp, st: Status, listening
             Fact("Online", if (!listening) "No (not running)" else if (st.online) "Yes" else "Not yet")
             Fact("Listening", if (st.listening) "Yes" else "No")
             Fact("Dongle", when {
-                st.radio.connected -> (if (st.radio.mode == "voice") "Road channels" else "EOT") +
+                st.radio.connected -> (when (st.radio.mode) { "voice" -> "Road channels"; "itc" -> "ITC (220 MHz)"; else -> "EOT" }) +
                     (if (st.radio.tuner.isNotEmpty()) ", ${st.radio.tuner}" else "")
                 st.radio.attached -> "Starting"
                 listening -> "Not connected"

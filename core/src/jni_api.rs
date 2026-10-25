@@ -329,7 +329,7 @@ pub extern "system" fn Java_com_railspotting_android_core_Native_dongleDetached(
     guard((), || CORE.dongle_detached());
 }
 
-/// "voice" or "eot".
+/// "voice", "eot" or "itc".
 #[no_mangle]
 pub extern "system" fn Java_com_railspotting_android_core_Native_setMode(mut env: JNIEnv, _c: JClass, mode: JString) {
     let m = text(&mut env, &mode);
